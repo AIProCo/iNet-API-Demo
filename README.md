@@ -2,9 +2,9 @@
 
 - This is a repository for demo of iNet-API developped by AIPro Inc.
   + iNet: AIPro Deep Learning Solution supporting the following functionalities:
-     - Object Detection (OD)
+     - Object Detection
      - Object Tracking
-     - Pedestrian Attribute Recognition (PAR)
+     - Pedestrian Attribute Recognition
      - Pose Estimation
      - Action Recognition
      - Pedestrian Counting & Zone Hitmap Estimation
