@@ -32,7 +32,7 @@
 #define OD_MD_FILEPATH "inputs/aipro_od_1_2.net"
 #define PAR_MD_FILEPATH "inputs/aipro_par_1_2.net"
 #define POSE_MD_FILEPATH "inputs/aipro_pose_1_2.net"
-#define ACT_MD_FILEPATH "inputs/aipro_act_1_2.net"
+#define ACT_MD_FILEPATH "inputs/aipro_act_1_3.net"
 
 using namespace std;
 using namespace cv;

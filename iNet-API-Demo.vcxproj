@@ -160,7 +160,7 @@
   </ImportGroup>
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties inputs_4config_3api_1json__JsonSchema="https://datahubproject.io/schemas/datahub_ingestion_schema.json" />
+      <UserProperties />
     </VisualStudio>
   </ProjectExtensions>
 </Project>

@@ -224,7 +224,7 @@ struct Config {
     Record rcd;
 };
 
+// reading/writing -> motionless
 const std::vector<std::string> aipro_t17 = {
-    "hand on mouth",   "pick up",   "throw", "sit down",    "stand up",   "clapping",
-    "reading/writing", "hand wave", "kick",  "cross hands", "staggering", "fall down",
-    "punch/slap",      "push",      "walk",  "squat down",  "run" };
+    "hand on mouth", "pick up",    "throw",     "sit down",   "stand up", "clapping", "motionless", "hand wave", "kick",
+    "cross hands",   "staggering", "fall down", "punch/slap", "push",     "walk",     "squat down", "run"};
