@@ -417,7 +417,7 @@ bool parseConfigAPI(Config& cfg, VideoDir& videoDir) {
     // apikey, gpu_id
     cfg.frameLimit = js["global"]["frame_limit"];
     cfg.key = js["global"]["apikey"];
-    cfg.gpuID = 3;
+    cfg.gpuID = js["global"]["gpu_id"];
 
     cfg.inputFiles = js["global"]["input_files"].get<vector<string>>();
     cfg.outputFiles = js["global"]["output_files"].get<vector<string>>();
