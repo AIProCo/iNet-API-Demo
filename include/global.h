@@ -164,7 +164,6 @@ struct DetBox {
 struct Config {
     std::string key;                       /// authorization Key
     uint frameLimit;                       /// number of frames to be processed
-    int gpuID;                             /// GPU ID used for inference
     std::vector<std::string> inputFiles;   /// list of the input files
     std::vector<std::string> outputFiles;  /// list of the output files
 
