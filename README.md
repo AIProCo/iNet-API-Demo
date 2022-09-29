@@ -46,8 +46,8 @@
 
 ### **Download and extract files**
 - Download and upzip the followings zip file. Then, copy and paste bin, inputs, and videos directories to the solution directory (the directory including the `.sln` file):
-  + Cuda compute capability 7.5(including RTX 20xx): https://drive.google.com/file/d/1qWfqX1tDzlxvKMlz2P_BIStyVUL9l9CE/view?usp=sharing
-  + Cuda compute capability 8.6(including RTX 30xx): https://drive.google.com/file/d/1RsJY49xkgH7FuIKuFTSbp1ovjq3djfMq/view?usp=sharing
+  + Cuda compute capability 7.5(including RTX 20xx): https://drive.google.com/file/d/1pGdcGb05u_Y95xSnI8jk9ks-zI2DJIAD/view?usp=sharing
+  + Cuda compute capability 8.6(including RTX 30xx): https://drive.google.com/file/d/1ucotw-1QqrODZBlnB0oidoqz18CW-bX8/view?usp=sharing
 
 ### **Run the project**
 
