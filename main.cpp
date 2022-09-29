@@ -472,7 +472,7 @@ bool parseConfigAPI(Config& cfg, VideoDir& videoDir) {
     cfg.heatmapScoreTh = 0.25f;
     cfg.actModelFile = ACT_MD_FILEPATH;
     cfg.actIDMapping = aipro_t17;
-    cfg.actBatchSize = 1;
+    cfg.actBatchSize = 1; // fixed
     cfg.actUpdatePeriod = 12;
     cfg.actLastPeriod = 48;
     cfg.multiPersons = false;  // fixed
