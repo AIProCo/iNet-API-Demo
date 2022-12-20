@@ -20,7 +20,7 @@
  * @param cfg configuration struct
  * @return initialization result(true: success, false: fail)
  */
-GENERATOR_API bool initModel(Config& cfg);
+GENERATOR_API bool initModel(Config &cfg);
 
 /** @brief Run detection and PAR models for a frame batch
  *
@@ -33,9 +33,9 @@ GENERATOR_API bool initModel(Config& cfg);
  * @param maxDist max distance in pixels between previous and current detection, to keep the same track_id
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModel(std::vector<std::vector<DetBox>>& dboxesMul, std::vector<cv::Mat>& frames,
-    std::vector<int>& vchIDs, std::vector<uint>& frameCnts, float odScoreTh,
-    int framesStory, int maxDist);
+GENERATOR_API bool runModel(std::vector<std::vector<DetBox>> &dboxesMul, std::vector<cv::Mat> &frames,
+                            std::vector<int> &vchIDs, std::vector<uint> &frameCnts, float odScoreTh, int framesStory,
+                            int maxDist);
 
 /** @brief Run Pose and Action models for the detected dboxesMul
  *
@@ -47,8 +47,8 @@ GENERATOR_API bool runModel(std::vector<std::vector<DetBox>>& dboxesMul, std::ve
  * @param actScoreTh threshold for filtering low confident actions
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModelAct(std::vector<std::vector<DetBox>>& dboxesMul, std::vector<cv::Mat>& frames,
-    std::vector<int>& vchIDs, std::vector<uint>& frameCnts, float actScoreTh);
+GENERATOR_API bool runModelAct(std::vector<std::vector<DetBox>> &dboxesMul, std::vector<cv::Mat> &frames,
+                               std::vector<int> &vchIDs, std::vector<uint> &frameCnts, float actScoreTh);
 
 /** @brief Destroy all models
  *
@@ -62,11 +62,39 @@ GENERATOR_API bool destroyModel();
  * @param None
  * @return flag for the reset result(true: success, false: fail)
  */
-GENERATOR_API bool resetCntLineAndZone(Config& cfg);
+GENERATOR_API bool resetCntLineAndZone(Config &cfg);
 
-/** @brief Reset records
+/** @brief Reset CntLine configuration
  *
  * @param None
  * @return flag for the reset result(true: success, false: fail)
  */
-GENERATOR_API bool resetRecord();
+GENERATOR_API bool resetCntLine(std::vector<CntLine> &cntLines);
+
+/** @brief Reset Zone configuration
+ *
+ * @param None
+ * @return flag for the reset result(true: success, false: fail)
+ */
+GENERATOR_API bool resetZone(std::vector<Zone> &zones);
+
+/** @brief Reset CntLine and Zone records
+ *
+ * @param None
+ * @return flag for the reset result(true: success, false: fail)
+ */
+GENERATOR_API bool resetCntLineAndZoneRecord();
+
+/** @brief Reset CntLine record
+ *
+ * @param None
+ * @return flag for the reset result(true: success, false: fail)
+ */
+GENERATOR_API bool resetCntLineRecord();
+
+/** @brief Reset Zone record
+ *
+ * @param None
+ * @return flag for the reset result(true: success, false: fail)
+ */
+GENERATOR_API bool resetZoneRecord();

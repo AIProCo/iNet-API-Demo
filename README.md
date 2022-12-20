@@ -45,11 +45,9 @@
 | Debugging  | Environment                    | PATH=bin;%PATH%
 
 ### **Download and extract files**
-- Download and upzip one of the followings zip files. Then, copy and paste bin, inputs, and videos directories to the solution directory (the directory including the `.sln` file):
-  + Cuda compute capability 7.5(including RTX 20xx):
-    - https://drive.google.com/file/d/1XjloGly9qOMIN5MjhPvM1PYkYioG-DOe/view?usp=sharing
-  + Cuda compute capability 8.6(including RTX 30xx): 
-    - https://drive.google.com/file/d/1MrCSal5BQJmn0rpZM2nme3CUbEwmGwNm/view?usp=sharing
+- Download and upzip the followings zip files. Then, copy and paste bin, inputs, and videos directories to the solution directory (the directory including the `.sln` file):
+  + Cuda compute capability should be 8.6 or later(ex: RTX 30xx): 
+    - https://drive.google.com/file/d/11HbT1kWmwBCGbXCPOHdqa3REylEfW7T4/view?usp=share_link
 
 ### **Run the project**
 

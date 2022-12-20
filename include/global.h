@@ -34,6 +34,7 @@ typedef unsigned char uchar;
 typedef unsigned int uint;
 
 struct Zone {
+    bool enabled;                /// enable flag
     int zoneID;                  /// Unique zone id
     int vchID;                   /// vchID where the zone exists
     bool isRestricted;           /// restricted zone
@@ -44,10 +45,11 @@ struct Zone {
 };
 
 struct CntLine {
-    int clineID;             /// unique counting line id
-    int vchID;               /// vchID where the counting line exits
-    int direction;           /// counting line direction (0:horizonal, 1:vertical)
-    cv::Point pts[2];        /// 2 end-points
+    bool enabled;      /// enable flag
+    int clineID;       /// unique counting line id
+    int vchID;         /// vchID where the counting line exits
+    int direction;     /// counting line direction (0:horizonal, 1:vertical)
+    cv::Point pts[2];  /// 2 end-points
 
     int totalUL[NUM_GENDERS][NUM_AGE_GROUPS];  // number of total object that move up or left
     int totalDR[NUM_GENDERS][NUM_AGE_GROUPS];  // number of total object that move down or right
@@ -63,43 +65,41 @@ struct PedAtts {
     int setCnt;                  /// frame count after the last PAR inference
     float atts[NUM_ATTRIBUTES];  /// Attributes to be extracted
 
-    static bool getGenderAtt(PedAtts& patts) {
+    static bool getGenderAtt(PedAtts &patts) {
         return (patts.atts[ATT_GENDER] > 0.5);
     }
 
-    static void getGenderAtt(PedAtts& patts, bool& isFemale, int& prob) {
+    static void getGenderAtt(PedAtts &patts, bool &isFemale, int &prob) {
         isFemale = patts.atts[ATT_GENDER] > 0.5;
         prob =
             isFemale ? (int)(patts.atts[ATT_GENDER] * 100 + 0.5f) : (int)((1.0f - patts.atts[ATT_GENDER]) * 100 + 0.5f);
     }
 
-    static int getAgeGroupAtt(PedAtts& patts) {
+    static int getAgeGroupAtt(PedAtts &patts) {
         int ageGroup;
 
         if (patts.atts[ATT_CHILD] > patts.atts[ATT_ADULT] && patts.atts[ATT_CHILD] > patts.atts[ATT_ELDER]) {
             ageGroup = CHILD_GROUP;
-        }
-        else {
-            if (patts.atts[ATT_ADULT] > patts.atts[ATT_ELDER]) 
+        } else {
+            if (patts.atts[ATT_ADULT] > patts.atts[ATT_ELDER]) {
                 ageGroup = ADULT_GROUP;
-            else 
+            } else {
                 ageGroup = ELDER_GROUP;
+            }
         }
 
         return ageGroup;
     }
 
-    static void getAgeGroupAtt(PedAtts& patts, int& ageGroup, int& prob) {
+    static void getAgeGroupAtt(PedAtts &patts, int &ageGroup, int &prob) {
         if (patts.atts[ATT_CHILD] > patts.atts[ATT_ADULT] && patts.atts[ATT_CHILD] > patts.atts[ATT_ELDER]) {
             ageGroup = CHILD_GROUP;
             prob = patts.atts[ATT_CHILD] * 100 + 0.5f;
-        }
-        else {
+        } else {
             if (patts.atts[ATT_ADULT] > patts.atts[ATT_ELDER]) {
                 ageGroup = ADULT_GROUP;
                 prob = patts.atts[ATT_ADULT] * 100 + 0.5f;
-            }
-            else {
+            } else {
                 ageGroup = ELDER_GROUP;
                 prob = patts.atts[ATT_ELDER] * 100 + 0.5f;
             }
@@ -110,11 +110,11 @@ struct PedAtts {
 /// Pose Information
 const std::vector<std::pair<int, int>> cocoSkeletons = {
     {16, 14}, {14, 12}, {17, 15}, {15, 13}, {12, 13}, {6, 12}, {7, 13}, {6, 7}, {6, 8}, {7, 9},
-    {8, 10},  {9, 11},  {2, 3},   {1, 2},   {1, 3},   {2, 4},  {3, 5},  {4, 6}, {5, 7} };
+    {8, 10},  {9, 11},  {2, 3},   {1, 2},   {1, 3},   {2, 4},  {3, 5},  {4, 6}, {5, 7}};
 
 /// class representing a single Keypoint in pose estimation
 class SKeyPoint {
-public:
+   public:
     int pointIdx;
     float x;
     float y;
@@ -125,7 +125,7 @@ public:
         y = _y;
         confScore = _conf;
     }
-    friend std::ostream& operator<<(std::ostream& os, const SKeyPoint& kpt) {
+    friend std::ostream &operator<<(std::ostream &os, const SKeyPoint &kpt) {
         os << "[" << kpt.pointIdx << "-(" << kpt.x << "," << kpt.y << ")," << kpt.confScore << "]";
         return os;
     }
