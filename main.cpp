@@ -490,6 +490,7 @@ bool parseConfigAPI(Config& cfg, VideoDir& videoDir) {
     for (auto &cntLineParam : cntLineParams) {
         CntLine cntLine;
 
+        cntLine.enabled = true;
         cntLine.clineID = cntLineParam[0];
         cntLine.vchID = cntLineParam[1];
         cntLine.pts[0].x = cntLineParam[2];
@@ -523,6 +524,7 @@ bool parseConfigAPI(Config& cfg, VideoDir& videoDir) {
     for (auto &zoneParam : zoneParams) {
         Zone zone;
 
+        zone.enabled = true;
         zone.zoneID = zoneParam[0];
         zone.vchID = zoneParam[1];
         zone.isRestricted = zoneParam[2] ? true : false;
