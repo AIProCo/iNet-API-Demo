@@ -231,6 +231,7 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
 
     vector<Rect> boxes;
     vector<Scalar> boxesColor;
+    vector<bool> emphasizes;
     vector<vector<string>> boxTexts;
 
     if (DRAW_DETECTION) {
@@ -254,13 +255,14 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
             strftime(buf, sizeof(buf), "Time: %H:%M:%S", curTm);
 
             string trkInfo1 = string(buf);
-            string trkInfo2 =
-                "Att(" + to_string(dbox.numFramesOT) + "): " + to_string((int)(dbox.activity[0] * 10 + 0.5)) + ", " +
-                to_string((int)(dbox.activity[1] * 10 + 0.5)) + ", " + to_string((int)(dbox.activity[2] * 10 + 0.5)) +
-                ", " + to_string((int)(dbox.activity[3] * 10 + 0.5));
+            //string trkInfo2 =
+            //    "Att(" + to_string(dbox.numFramesOT) + "): " + to_string((int)(dbox.activity[0] * 10 + 0.5)) + ", " +
+            //    to_string((int)(dbox.activity[1] * 10 + 0.5)) + ", " + to_string((int)(dbox.activity[2] * 10 + 0.5)) +
+            //    ", " + to_string((int)(dbox.activity[3] * 10 + 0.5));
             //string trkInfo2 = "Att: " + to_string((int)(dbox.activity * 10 + 0.5)) + "(" + to_string(dbox.numFramesOT) + ")";
 
-            vector<string> texts{ objName, trkInfo1, trkInfo2 };
+            vector<string> texts{ objName, trkInfo1};
+            //vector<string> texts{objName, trkInfo1, trkInfo2};
 
             if (label == PERSON && cfg.parEnable) {
                 string trkInfo;
@@ -306,6 +308,11 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
             boxesColor.push_back(boxColor);
             boxTexts.push_back(texts);
 
+            if (dbox.justCounted > 0)
+                emphasizes.push_back(true);
+            else
+                emphasizes.push_back(false);
+
             if (cfg.poseEnable && DRAW_POSE) {
                 Skeleton& skel = dbox.skel;
 
@@ -329,7 +336,7 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
             }
         }
 
-        Vis::drawBoxes(img, boxes, boxesColor, boxTexts);
+        Vis::drawBoxes(img, boxes, boxesColor, boxTexts, emphasizes);
     }
 
     // draw par results

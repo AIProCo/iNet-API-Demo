@@ -168,9 +168,8 @@ class Vis {
 public:
 	/// draw bboxes with text info for each detected object
 	static void drawBoxes(Mat& matImg, vector<Rect> boxes, vector<Scalar> boxColors, vector<vector<string>> texts,
-		Scalar textColor = Scalar(0, 0, 0), int fontFace = FONT_HERSHEY_SIMPLEX,
-		double fontScale = 0.5f, int thickness = 1, int vSpace = 4, int hSpace = 6,
-		int textBlockTopOffset = 0) {
+                       vector<bool> emphasizes, Scalar textColor = Scalar(0, 0, 0), int fontFace = FONT_HERSHEY_SIMPLEX,
+						double fontScale = 0.5f, int thickness = 1, int vSpace = 4, int hSpace = 6, int textBlockTopOffset = 0) {
 		for (int i = 0; i < boxes.size(); i++) {
 			Rect box = boxes[i];
 			int l = box.x;
@@ -179,7 +178,10 @@ public:
 			int b = box.y + box.height;
 
 			/// draw bboxes
-			rectangle(matImg, Point(l, t), Point(r, b), boxColors[i], thickness + 1);
+            if (emphasizes[i])
+                rectangle(matImg, Point(l, t), Point(r, b), boxColors[i], thickness + 10);
+            else
+                rectangle(matImg, Point(l, t), Point(r, b), boxColors[i], thickness + 1);
 
 			/// calculate boxs
 			Size bboxTexts = getBoxForTexts(texts[i], fontFace, fontScale, thickness, vSpace, hSpace);

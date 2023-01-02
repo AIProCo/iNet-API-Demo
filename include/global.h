@@ -149,6 +149,7 @@ struct DetBox {
     int rxP, ryP;       /// for internal usage: reference position in the previous frame for counting
     uint lastFrameCnt;  /// for internal usage
     float distVar;      /// box center variation after temporal pooling
+    int justCounted;    /// for emphasizing the object just counted (15:lastest - 0:no action)
 
     PedAtts patts;  /// PAR info
 
