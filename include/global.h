@@ -146,16 +146,15 @@ struct DetBox {
     time_t inTime;    /// time when this object is detected (this should be set in Counter)
     bool onBoundary;  /// located on frame boundary
 
-    int rxP, ryP;       /// for internal usage: reference position in the previous frame for counting
-    uint lastFrameCnt;  /// for internal usage
-    float distVar;      /// box center variation after temporal pooling
-    int justCounted;    /// for emphasizing the object just counted (15:lastest - 0:no action)
+    int rxP, ryP;           /// for internal usage: reference position in the previous frame for counting
+    uint lastFrameCnt;      /// for internal usage
+    float distVar;          /// box center variation after temporal pooling
+    uchar justCountedLine;  /// for emphasizing the object just counted (15:lastest - 0:no action)
+    uchar justCountedZone;  /// for emphasizing the object just counted (15:lastest - 0:no action)
 
     PedAtts patts;  /// PAR info
 
-    Skeleton skel;      /// skel info
-    float activity[4];  /// activity of the current skel compared to the previous skel (head, shoulders, hands, foots)
-    int numFramesOT;    /// number of the stored activity values in the current clip
+    Skeleton skel;  /// skel info
 
     int actID;      /// action ID in actIDMapping
     float actConf;  /// confidence of the current act
@@ -180,8 +179,6 @@ struct Config {
     std::vector<bool> isMainChannel;  // flags for indicating main channels
 
     // tracking
-    int frameStory;        /// the number of False-Negative detections, during which track_id will be kept
-    int maxDist;           /// max distance in pixels between previous and current detection, to keep the same track_id
     int longLastingObjTh;  /// threshold for checking long-lasting objects in second
     float noMoveTh;        /// threshold for checking no movement objects
 
@@ -224,7 +221,128 @@ struct Config {
     Record rcd;
 };
 
-// reading/writing -> motionless
+// reading/writing -> motionless, staggering -> walk2
 const std::vector<std::string> aipro_t17 = {
-    "hand on mouth", "pick up",    "throw",     "sit down",   "stand up", "clapping", "motionless", "hand wave", "kick",
-    "cross hands",   "staggering", "fall down", "punch/slap", "push",     "walk",     "squat down", "run"};
+    "hand on mouth", "pick up", "throw",     "sit down",   "stand up", "clapping", "motionless", "hand wave", "kick",
+    "cross hands",   "walk2",   "fall down", "punch/slap", "push",     "walk",     "squat down", "run"};
+
+const std::vector<std::string> ntu120Labels = {"drink water",
+                                               "eat meal/snack",
+                                               "brushing teeth",
+                                               "brushing hair",
+                                               "drop",
+                                               "pickup",
+                                               "throw",
+                                               "sitting down",
+                                               "standing up (from sitting position)",
+                                               "clapping",
+                                               "reading",
+                                               "writing",
+                                               "tear up paper",
+                                               "wear jacket",
+                                               "take off jacket",
+                                               "wear a shoe",
+                                               "take off a shoe",
+                                               "wear on glasses",
+                                               "take off glasses",
+                                               "put on a hat/cap",
+                                               "take off a hat/cap",
+                                               "cheer up",
+                                               "hand waving",
+                                               "kicking something",
+                                               "reach into pocket",
+                                               "hopping (one foot jumping)",
+                                               "jump up",
+                                               "make a phone call/answer phone",
+                                               "playing with phone/tablet",
+                                               "typing on a keyboard",
+                                               "pointing to something with finger",
+                                               "taking a selfie",
+                                               "check time (from watch)",
+                                               "rub two hands together",
+                                               "nod head/bow",
+                                               "shake head",
+                                               "wipe face",
+                                               "salute",
+                                               "put the palms together",
+                                               "cross hands in front (say stop)",
+                                               "sneeze/cough",
+                                               "staggering",
+                                               "falling",
+                                               "touch head (headache)",
+                                               "touch chest (stomachache/heart pain)",
+                                               "touch back (backache)",
+                                               "touch neck (neckache)",
+                                               "nausea or vomiting condition",
+                                               "use a fan (with hand or paper)/feeling warm",
+                                               "punching/slapping other person",
+                                               "kicking other person",
+                                               "pushing other person",
+                                               "pat on back of other person",
+                                               "point finger at the other person",
+                                               "hugging other person",
+                                               "giving something to other person",
+                                               "touch other person's pocket",
+                                               "handshaking",
+                                               "walking towards each other",
+                                               "walking apart from each other",
+                                               "put on headphone",
+                                               "take off headphone",
+                                               "shoot at the basket",
+                                               "bounce ball",
+                                               "tennis bat swing",
+                                               "juggling table tennis balls",
+                                               "hush (quite)",
+                                               "flick hair",
+                                               "thumb up",
+                                               "thumb down",
+                                               "make ok sign",
+                                               "make victory sign",
+                                               "staple book",
+                                               "counting money",
+                                               "cutting nails",
+                                               "cutting paper (using scissors)",
+                                               "snapping fingers",
+                                               "open bottle",
+                                               "sniff (smell)",
+                                               "squat down",
+                                               "toss a coin",
+                                               "fold paper",
+                                               "ball up paper",
+                                               "play magic cube",
+                                               "apply cream on face",
+                                               "apply cream on hand back",
+                                               "put on bag",
+                                               "take off bag",
+                                               "put something into a bag",
+                                               "take something out of a bag",
+                                               "open a box",
+                                               "move heavy objects",
+                                               "shake fist",
+                                               "throw up cap/hat",
+                                               "hands up (both hands)",
+                                               "cross arms",
+                                               "arm circles",
+                                               "arm swings",
+                                               "running on the spot",
+                                               "butt kicks (kick backward)",
+                                               "cross toe touch",
+                                               "side kick",
+                                               "yawn",
+                                               "stretch oneself",
+                                               "blow nose",
+                                               "hit other person with something",
+                                               "wield knife towards other person",
+                                               "knock over other person (hit with body)",
+                                               "grab other person¡¯s stuff",
+                                               "shoot at other person with a gun",
+                                               "step on foot",
+                                               "high-five",
+                                               "cheers and drink",
+                                               "carry something with other person",
+                                               "take a photo of other person",
+                                               "follow other person",
+                                               "whisper in other person¡¯s ear",
+                                               "exchange things with other person",
+                                               "support somebody with hand",
+                                               "finger-guessing game (playing rock-paper-scissors)."};

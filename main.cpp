@@ -38,12 +38,12 @@ using namespace std;
 using namespace cv;
 using json = nlohmann::json;
 
-void printRecord(Record& rcd, unsigned int frameCnt);  // just for printing (can be omitted)
-bool parseConfigAPI(Config& cfg, VideoDir& videoDir);
+void printRecord(Record &rcd, unsigned int frameCnt);  // just for printing (can be omitted)
+bool parseConfigAPI(Config &cfg, VideoDir &videoDir);
 
-void drawZones(Config& cfg, Mat& img, int vchID, double alpha);
-void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double alpha = 0.3,
-    const vector<pair<int, int>>& skelPairs = cocoSkeletons);
+void drawZones(Config &cfg, Mat &img, int vchID, double alpha);
+void drawBoxes(Config &cfg, Mat &img, vector<DetBox *> &dboxesP, int vchID, double alpha = 0.3,
+               const vector<pair<int, int>> &skelPairs = cocoSkeletons);
 
 int main() {
     Config cfg;
@@ -93,36 +93,36 @@ int main() {
             if (frames.size() < odBatchSize)
                 continue;
 
-            vector<vector<DetBox>> dboxesMul;
+            vector<vector<DetBox *>> dboxesMulP;
 
             start = clock();
 
             // batch inference for Detection and PAR. Detection, tracking, and PAR results are stored
-            if (!runModel(dboxesMul, frames, vchIDs, frameCnts, cfg.odScoreTh, cfg.frameStory, cfg.maxDist))
+            if (!runModel(dboxesMulP, frames, vchIDs, frameCnts, cfg.odScoreTh))
                 break;
 
             middle = clock();
 
             // batch inference for Pose and Action. Skeletion and Action results are stored(to be implemented)
-            if (!runModelAct(dboxesMul, frames, vchIDs, frameCnts, cfg.actScoreTh))
+            if (!runModelAct(dboxesMulP, frames, vchIDs, frameCnts, cfg.actScoreTh))
                 break;
 
             end = clock();
 
             for (int b = 0; b < odBatchSize; b++) {
-                drawBoxes(cfg, frames[b], dboxesMul[b], vchIDs[b]);
+                drawBoxes(cfg, frames[b], dboxesMulP[b], vchIDs[b]);
                 (videoDir[vchIDs[b]]) << frames[b];  // write a frame
             }
 
             float inf0 = (middle - start) / odBatchSize;
-            float inf1 = (middle - start) / odBatchSize;
+            float inf1 = (end - middle) / odBatchSize;
 
             if (frameCnt > 10 && frameCnt < 500) {  // skip the start frames and limit the number of elements
                 inf0s.push_back(inf0);
                 inf1s.push_back(inf1);
             }
 
-            // printRecord(cfg.rcd, frameCnt); // print the record
+            // printRecord(cfg.rcd, frameCnt);  // print the record
             cout << "Frame " << frameCnt << ">\t"
                  << "OD+Track+PAR: " << inf0 << "ms\t"
                  << "POSE+ACT: " << inf1 << "ms\n";
@@ -142,7 +142,9 @@ int main() {
         float avgInf0 = accumulate(inf0s.begin(), inf0s.end(), 0) / inf0s.size();
         float avgInf1 = accumulate(inf1s.begin(), inf1s.end(), 0) / inf1s.size();
 
-        cout << "\nAverage Inference Time> " << "OD+Track+PAR: " << avgInf0 << "ms\t" << "POSE+ACT: " << avgInf1 << "ms\n";
+        cout << "\nAverage Inference Time> "
+             << "OD+Track+PAR: " << avgInf0 << "ms\t"
+             << "POSE+ACT: " << avgInf1 << "ms\n";
     }
 
     cout << "\nOutput file(s):\n";
@@ -154,7 +156,7 @@ int main() {
     return 0;
 }
 
-void printRecord(Record& rcd, unsigned int frameCnt) {
+void printRecord(Record &rcd, unsigned int frameCnt) {
 #ifdef _WIN32
     HANDLE hStdout;
     COORD destCoord;
@@ -166,58 +168,58 @@ void printRecord(Record& rcd, unsigned int frameCnt) {
     SetConsoleCursorPosition(hStdout, destCoord);
 #endif
 
-    cout << "Zone History               \n"; //spaces needed
+    cout << "Zone History               \n";  // spaces needed
     for (int i = 0; i < rcd.zones.size(); i++) {
-        Zone& zone = rcd.zones[i];
+        Zone &zone = rcd.zones[i];
         int cM = zone.curPeople[0][0] + zone.curPeople[0][1] + zone.curPeople[0][2];
         int cF = zone.curPeople[1][0] + zone.curPeople[1][1] + zone.curPeople[1][2];
 
         cout << "Zone " << zone.zoneID << endl;
         cout << " Cur> M: " << cM << "(" << zone.curPeople[0][0] << ", " << zone.curPeople[0][1] << ", "
-            << zone.curPeople[0][2] << "), F: " << cF << "(" << zone.curPeople[1][0] << ", " << zone.curPeople[1][1]
-            << ", " << zone.curPeople[1][2] << ")" << endl;
+             << zone.curPeople[0][2] << "), F: " << cF << "(" << zone.curPeople[1][0] << ", " << zone.curPeople[1][1]
+             << ", " << zone.curPeople[1][2] << ")" << endl;
 
         int hM = zone.hitMap[0][0] + zone.hitMap[0][1] + zone.hitMap[0][2];
         int hF = zone.hitMap[1][0] + zone.hitMap[1][1] + zone.hitMap[1][2];
 
         cout << " Hit> M: " << hM << "(" << zone.hitMap[0][0] << ", " << zone.hitMap[0][1] << ", " << zone.hitMap[0][2]
-            << "), F: " << hF << "(" << zone.hitMap[1][0] << ", " << zone.hitMap[1][1] << ", " << zone.hitMap[1][2]
-            << ")" << endl;
+             << "), F: " << hF << "(" << zone.hitMap[1][0] << ", " << zone.hitMap[1][1] << ", " << zone.hitMap[1][2]
+             << ")" << endl;
     }
 
     cout << "\nCounting Line History\n";
     for (int i = 0; i < rcd.cntLines.size(); i++) {
-        CntLine& cline = rcd.cntLines[i];
+        CntLine &cline = rcd.cntLines[i];
 
         int uM = cline.totalUL[0][0] + cline.totalUL[0][1] + cline.totalUL[0][2];
         int uF = cline.totalUL[1][0] + cline.totalUL[1][1] + cline.totalUL[1][2];
 
         cout << "Counting Line " << cline.clineID << endl;
         cout << " U/L> M: " << uM << "(" << cline.totalUL[0][0] << ", " << cline.totalUL[0][1] << ", "
-            << cline.totalUL[0][2] << "), F: " << uF << "(" << cline.totalUL[1][0] << ", " << cline.totalUL[1][1]
-            << ", " << cline.totalUL[1][2] << ")" << endl;
+             << cline.totalUL[0][2] << "), F: " << uF << "(" << cline.totalUL[1][0] << ", " << cline.totalUL[1][1]
+             << ", " << cline.totalUL[1][2] << ")" << endl;
 
         int dM = cline.totalDR[0][0] + cline.totalDR[0][1] + cline.totalDR[0][2];
         int dF = cline.totalDR[1][0] + cline.totalDR[1][1] + cline.totalDR[1][2];
 
         cout << " D/R> M: " << dM << "(" << cline.totalDR[0][0] << ", " << cline.totalDR[0][1] << ", "
-            << cline.totalDR[0][2] << "), F: " << dF << "(" << cline.totalDR[1][0] << ", " << cline.totalDR[1][1]
-            << ", " << cline.totalDR[1][2] << ")" << endl;
+             << cline.totalDR[0][2] << "), F: " << dF << "(" << cline.totalDR[1][0] << ", " << cline.totalDR[1][1]
+             << ", " << cline.totalDR[1][2] << ")" << endl;
     }
 }
 
-void drawZones(Config& cfg, Mat& img, int vchID, double alpha) {
-    int np[1] = { 4 };
+void drawZones(Config &cfg, Mat &img, int vchID, double alpha) {
+    int np[1] = {4};
     cv::Mat layer;
 
-    for (Zone& zone : cfg.rcd.zones) {
+    for (Zone &zone : cfg.rcd.zones) {
         if (zone.vchID == vchID) {
             if (layer.empty())
                 layer = img.clone();
 
             int z = zone.zoneID;
             const Scalar color(colorTable[3 * z], colorTable[3 * z + 1], colorTable[3 * z + 2]);
-            fillPoly(layer, { zone.pts }, color);
+            fillPoly(layer, {zone.pts}, color);
         }
     }
 
@@ -225,8 +227,9 @@ void drawZones(Config& cfg, Mat& img, int vchID, double alpha) {
         cv::addWeighted(img, alpha, layer, 1 - alpha, 0, img);
 }
 
-void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double alpha, const vector<pair<int, int>>& skelPairs) {
-    const string* objNames = cfg.odIDMapping.data();
+void drawBoxes(Config &cfg, Mat &img, vector<DetBox *> &dboxesP, int vchID, double alpha,
+               const vector<pair<int, int>> &skelPairs) {
+    const string *objNames = cfg.odIDMapping.data();
     time_t now = time(NULL);
 
     vector<Rect> boxes;
@@ -235,7 +238,9 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
     vector<vector<string>> boxTexts;
 
     if (DRAW_DETECTION) {
-        for (auto& dbox : dboxes) {
+        for (auto &dboxP : dboxesP) {
+            DetBox &dbox = (*dboxP);
+
             if (dbox.objID >= cfg.numClasses)
                 continue;
 
@@ -247,34 +252,28 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
                 continue;  // should check scores are ordered. Otherwise, use continue
 
             Scalar boxColor(50, 255, 255);
-            string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
-            //string objName = to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
+            // string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
+            string objName =
+                to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
 
-            char buf[80];
-            tm* curTm = localtime(&dbox.inTime);
-            strftime(buf, sizeof(buf), "Time: %H:%M:%S", curTm);
+            // char buf[80];
+            // tm *curTm = localtime(&dbox.inTime);
+            // strftime(buf, sizeof(buf), "Time: %H:%M:%S", curTm);
+            // string timeInfo = string(buf);
 
-            string trkInfo1 = string(buf);
-            //string trkInfo2 =
-            //    "Att(" + to_string(dbox.numFramesOT) + "): " + to_string((int)(dbox.activity[0] * 10 + 0.5)) + ", " +
-            //    to_string((int)(dbox.activity[1] * 10 + 0.5)) + ", " + to_string((int)(dbox.activity[2] * 10 + 0.5)) +
-            //    ", " + to_string((int)(dbox.activity[3] * 10 + 0.5));
-            //string trkInfo2 = "Att: " + to_string((int)(dbox.activity * 10 + 0.5)) + "(" + to_string(dbox.numFramesOT) + ")";
-
-            vector<string> texts{ objName, trkInfo1};
-            //vector<string> texts{objName, trkInfo1, trkInfo2};
+            vector<string> texts{objName};
+            // vector<string> texts{objName, timeInfo};
 
             if (label == PERSON && cfg.parEnable) {
                 string trkInfo;
                 int period = now - dbox.inTime;
-                if (period < cfg.longLastingObjTh) { // no action
-                    trkInfo = "ET: " + to_string(period);
-                }
-                else { // action (Sleep or Hang around)
-                    if (dbox.distVar < cfg.noMoveTh) // Sleep event
-                        trkInfo = "ET: " + to_string(period) + ", No movement: " + to_string((int)dbox.distVar);
-                    else // Hang around event
-                        trkInfo = "ET: " + to_string(period) + ", Hang around: " + to_string((int)dbox.distVar);
+                if (period < cfg.longLastingObjTh) {  // no action
+                    trkInfo = "ET: " + to_string(period) + " (" + to_string((int)dbox.distVar) + ")";
+                } else {                              // action (Sleep or Hang around)
+                    if (dbox.distVar < cfg.noMoveTh)  // Sleep event
+                        trkInfo = "ET: " + to_string(period) + ", No movement(" + to_string((int)dbox.distVar) + ")";
+                    else  // Hang around event
+                        trkInfo = "ET: " + to_string(period) + ", Hang around(" + to_string((int)dbox.distVar) + ")";
                 }
                 texts.push_back(trkInfo);
 
@@ -300,7 +299,7 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
                 if (dbox.actID != -1) {
                     string actInfo;
                     actInfo = "Action: " + cfg.actIDMapping[dbox.actID] + " (" + to_string((int)(dbox.actConf * 100)) +
-                        "%)-" + to_string(dbox.actSetCnt);
+                              "%)-" + to_string(dbox.actSetCnt);
                     texts.push_back(actInfo);
                 }
             }
@@ -308,25 +307,25 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
             boxesColor.push_back(boxColor);
             boxTexts.push_back(texts);
 
-            if (dbox.justCounted > 0)
+            if ((DRAW_CNTLINE && dbox.justCountedLine > 0) || (DRAW_ZONE && dbox.justCountedZone > 0))
                 emphasizes.push_back(true);
             else
                 emphasizes.push_back(false);
 
             if (cfg.poseEnable && DRAW_POSE) {
-                Skeleton& skel = dbox.skel;
+                Skeleton &skel = dbox.skel;
 
                 if (skel.size() != NUM_SKEL_KEYPOINTS)
                     continue;
 
-                for (auto const& kpt : skel) {
+                for (auto const &kpt : skel) {
                     float x = kpt.x;
                     float y = kpt.y;
                     if (kpt.confScore >= cfg.poseScoreTh) {
                         cv::circle(img, cv::Point(x, y), 4, cv::Scalar(0, 0, 255), 2, LINE_AA);
                     }
                 }
-                for (auto const& pair : skelPairs) {
+                for (auto const &pair : skelPairs) {
                     SKeyPoint p1 = skel[pair.first - 1];
                     SKeyPoint p2 = skel[pair.second - 1];
                     if (p1.confScore >= cfg.poseScoreTh && p2.confScore >= cfg.poseScoreTh) {
@@ -339,14 +338,14 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
         Vis::drawBoxes(img, boxes, boxesColor, boxTexts, emphasizes);
     }
 
+    if (DRAW_ZONE)
+        drawZones(cfg, img, vchID, alpha);
+
     // draw par results
     if (DRAW_ZONE_COUNTING && cfg.parEnable) {
-        vector<string> texts = { "People Counting for Each Zone" };
+        vector<string> texts = {"People Counting for Each Zone"};
 
-        if (DRAW_ZONE)
-            drawZones(cfg, img, vchID, alpha);
-
-        for (Zone& zone : cfg.rcd.zones) {
+        for (Zone &zone : cfg.rcd.zones) {
             if (vchID == zone.vchID) {
                 int curMTotal, curFTotal;
                 curMTotal = zone.curPeople[0][0] + zone.curPeople[0][1] + zone.curPeople[0][2];
@@ -354,18 +353,18 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
 
                 string title = "-Zone " + to_string(zone.zoneID);
                 string cur = "  Cur> M: " + to_string(curMTotal) + "(" + to_string(zone.curPeople[0][0]) + ", " +
-                    to_string(zone.curPeople[0][1]) + ", " + to_string(zone.curPeople[0][2]) + "), " +
-                    " F: " + to_string(curFTotal) + "(" + to_string(zone.curPeople[1][0]) + ", " +
-                    to_string(zone.curPeople[1][1]) + ", " + to_string(zone.curPeople[1][2]) + ")";
+                             to_string(zone.curPeople[0][1]) + ", " + to_string(zone.curPeople[0][2]) + "), " +
+                             " F: " + to_string(curFTotal) + "(" + to_string(zone.curPeople[1][0]) + ", " +
+                             to_string(zone.curPeople[1][1]) + ", " + to_string(zone.curPeople[1][2]) + ")";
 
                 int hitMTotal, hitFTotal;
                 hitMTotal = zone.hitMap[0][0] + zone.hitMap[0][1] + zone.hitMap[0][2];
                 hitFTotal = zone.hitMap[1][0] + zone.hitMap[1][1] + zone.hitMap[1][2];
 
                 string hit = "  Hit> M: " + to_string(hitMTotal) + "(" + to_string(zone.hitMap[0][0]) + ", " +
-                    to_string(zone.hitMap[0][1]) + ", " + to_string(zone.hitMap[0][2]) + "), " +
-                    " F: " + to_string(hitFTotal) + "(" + to_string(zone.hitMap[1][0]) + ", " +
-                    to_string(zone.hitMap[1][1]) + ", " + to_string(zone.hitMap[1][2]) + ")";
+                             to_string(zone.hitMap[0][1]) + ", " + to_string(zone.hitMap[0][2]) + "), " +
+                             " F: " + to_string(hitFTotal) + "(" + to_string(zone.hitMap[1][0]) + ", " +
+                             to_string(zone.hitMap[1][1]) + ", " + to_string(zone.hitMap[1][2]) + ")";
 
                 texts.push_back(title);
                 texts.push_back(cur);
@@ -376,34 +375,37 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
         Vis::drawTextBlock(img, Point(18, 40), texts, 1, 2);
     }
 
+    if (DRAW_CNTLINE) {
+        for (CntLine &cntLine : cfg.rcd.cntLines) {
+            if (vchID == cntLine.vchID)
+                line(img, cntLine.pts[0], cntLine.pts[1], Scalar(0, 255, 0), 2, LINE_8);
+        }
+    }
+
     // draw couniting results
     if (DRAW_CNTLINE_COUNTING && cfg.parEnable) {
-        vector<string> texts = { "People Counting for Each Line" };
+        vector<string> texts = {"People Counting for Each Line"};
 
-        for (CntLine& cntLine : cfg.rcd.cntLines) {
+        for (CntLine &cntLine : cfg.rcd.cntLines) {
             if (vchID == cntLine.vchID) {
-                if (DRAW_CNTLINE) {
-                    line(img, cntLine.pts[0], cntLine.pts[1], Scalar(0, 255, 0), 2, LINE_8);
-                }
-
                 int upMTotal, upFTotal;
                 upMTotal = cntLine.totalUL[0][0] + cntLine.totalUL[0][1] + cntLine.totalUL[0][2];
                 upFTotal = cntLine.totalUL[1][0] + cntLine.totalUL[1][1] + cntLine.totalUL[1][2];
 
                 string title = "-Counting Line " + to_string(cntLine.clineID);
                 string up = "  U/L> M: " + to_string(upMTotal) + "(" + to_string(cntLine.totalUL[0][0]) + ", " +
-                    to_string(cntLine.totalUL[0][1]) + ", " + to_string(cntLine.totalUL[0][2]) + "), " +
-                    " F: " + to_string(upFTotal) + "(" + to_string(cntLine.totalUL[1][0]) + ", " +
-                    to_string(cntLine.totalUL[1][1]) + ", " + to_string(cntLine.totalUL[1][2]) + ")";
+                            to_string(cntLine.totalUL[0][1]) + ", " + to_string(cntLine.totalUL[0][2]) + "), " +
+                            " F: " + to_string(upFTotal) + "(" + to_string(cntLine.totalUL[1][0]) + ", " +
+                            to_string(cntLine.totalUL[1][1]) + ", " + to_string(cntLine.totalUL[1][2]) + ")";
 
                 int dwMTotal, dwFTotal;
                 dwMTotal = cntLine.totalDR[0][0] + cntLine.totalDR[0][1] + cntLine.totalDR[0][2];
                 dwFTotal = cntLine.totalDR[1][0] + cntLine.totalDR[1][1] + cntLine.totalDR[1][2];
 
                 string dw = "  D/R> M: " + to_string(dwMTotal) + "(" + to_string(cntLine.totalDR[0][0]) + ", " +
-                    to_string(cntLine.totalDR[0][1]) + ", " + to_string(cntLine.totalDR[0][2]) + "), " +
-                    " F: " + to_string(dwFTotal) + "(" + to_string(cntLine.totalDR[1][0]) + ", " +
-                    to_string(cntLine.totalDR[1][1]) + ", " + to_string(cntLine.totalDR[1][2]) + ")";
+                            to_string(cntLine.totalDR[0][1]) + ", " + to_string(cntLine.totalDR[0][2]) + "), " +
+                            " F: " + to_string(dwFTotal) + "(" + to_string(cntLine.totalDR[1][0]) + ", " +
+                            to_string(cntLine.totalDR[1][1]) + ", " + to_string(cntLine.totalDR[1][2]) + ")";
 
                 texts.push_back(title);
                 texts.push_back(up);
@@ -415,13 +417,12 @@ void drawBoxes(Config& cfg, Mat& img, vector<DetBox>& dboxes, int vchID, double 
     }
 }
 
-bool parseConfigAPI(Config& cfg, VideoDir& videoDir) {
+bool parseConfigAPI(Config &cfg, VideoDir &videoDir) {
     string jsonCfgFile = CFG_FILEPATH;
     std::ifstream cfgFile(jsonCfgFile);
     json js;
     cfgFile >> js;
 
-    // apikey, gpu_id
     cfg.frameLimit = js["global"]["frame_limit"];
     cfg.key = js["global"]["apikey"];
 
@@ -440,7 +441,8 @@ bool parseConfigAPI(Config& cfg, VideoDir& videoDir) {
     cfg.frameWidths = videoDir.getFrameWidths();
     cfg.frameHeights = videoDir.getFrameHeights();
     cfg.fpss = videoDir.getFpss();
-    cfg.isMainChannel.resize(cfg.numChannels, true); //you can select main channels to which action recognition is applied
+    cfg.isMainChannel.resize(cfg.numChannels,
+                             true);  // you can select main channels to which action recognition is applied
 
     // od config
     cfg.odEnable = true;
@@ -450,11 +452,10 @@ bool parseConfigAPI(Config& cfg, VideoDir& videoDir) {
     cfg.odScoreTh = js["od"]["score_th"];
     cfg.odBatchSize = 1;  // from 1 to 8
     cfg.odIDMapping = {"person"};
+    // cfg.odIDMapping = {"person", "bycle", "car", "motorcycle", "airplane", "bus", "train", "truck"};
     cfg.numClasses = cfg.odIDMapping.size();
 
     // tracking
-    cfg.frameStory = 9;
-    cfg.maxDist = 200;
     cfg.longLastingObjTh = 300;
     cfg.noMoveTh = 3.0f;
 
@@ -478,7 +479,7 @@ bool parseConfigAPI(Config& cfg, VideoDir& videoDir) {
     cfg.heatmapScoreTh = 0.25f;
     cfg.actModelFile = ACT_MD_FILEPATH;
     cfg.actIDMapping = aipro_t17;
-    cfg.actBatchSize = 1; // fixed
+    cfg.actBatchSize = 1;  // fixed
     cfg.actUpdatePeriod = 12;
     cfg.actLastPeriod = 48;
     cfg.multiPersons = false;  // fixed
@@ -486,7 +487,7 @@ bool parseConfigAPI(Config& cfg, VideoDir& videoDir) {
     // clip config
     cfg.clipLength = 48;
     cfg.missingLimit = 12;
-    cfg.maxNumClips = 4;  // can be set to an arbitrary number ((ex) 2 * cfg.poseBatchSize)
+    cfg.maxNumClips = 8;  // 2 * cfg.poseBatchSize;  // can be set to an arbitrary number
 
     // counting
     cfg.debouncingTh = 10;
