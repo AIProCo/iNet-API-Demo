@@ -18,9 +18,10 @@
 /** @brief Initialize model
  *
  * @param cfg configuration struct
+ * @param rcd record struct
  * @return initialization result(true: success, false: fail)
  */
-GENERATOR_API bool initModel(Config &cfg);
+GENERATOR_API bool initModel(Config &cfg, Record &rcd);
 
 /** @brief Run detection and PAR models for a frame batch
  *
@@ -56,21 +57,21 @@ GENERATOR_API bool destroyModel();
 
 /** @brief Reset CntLine and Zone configuration
  *
- * @param None
+ * @param rcd record struct
  * @return flag for the reset result(true: success, false: fail)
  */
-GENERATOR_API bool resetCntLineAndZone(Config &cfg);
+GENERATOR_API bool resetCntLineAndZone(Record &rcd);
 
 /** @brief Reset CntLine configuration
  *
- * @param None
+ * @param cntLines vector of CntLines
  * @return flag for the reset result(true: success, false: fail)
  */
 GENERATOR_API bool resetCntLine(std::vector<CntLine> &cntLines);
 
 /** @brief Reset Zone configuration
  *
- * @param None
+ * @param zones vector of Zones
  * @return flag for the reset result(true: success, false: fail)
  */
 GENERATOR_API bool resetZone(std::vector<Zone> &zones);

@@ -29,7 +29,7 @@
 ### **Download and extract files**
 - Download and upzip the followings zip files. Then, copy and paste bin, inputs, and videos directories to the solution directory (the directory including the `.sln` file):
   + Cuda compute capability of your GPU should be 8.6 or later(ex: RTX 30xx): 
-    - https://drive.google.com/file/d/1NXW9zycWTg99Pw3iljoonEAAw_BFz-mU/view?usp=share_link
+    - https://drive.google.com/file/d/1MaKuKZDcaDy_n4v3lClLjg4z1RCyq4ee/view?usp=share_link
 
 ### **Run the project**
 

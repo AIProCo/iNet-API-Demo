@@ -39,22 +39,23 @@ using namespace cv;
 using json = nlohmann::json;
 
 void printRecord(Record &rcd, unsigned int frameCnt);  // just for printing (can be omitted)
-bool parseConfigAPI(Config &cfg, VideoDir &videoDir);
+bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir);
 
-void drawZones(Config &cfg, Mat &img, int vchID, double alpha);
-void drawBoxes(Config &cfg, Mat &img, vector<DetBox *> &dboxesP, int vchID, double alpha = 0.3,
+void drawZones(Record &rcd, Mat &img, int vchID, double alpha);
+void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox *> &dboxesP, int vchID, double alpha = 0.3,
                const vector<pair<int, int>> &skelPairs = cocoSkeletons);
 
 int main() {
     Config cfg;
+    Record rcd;
     VideoDir videoDir;
 
-    if (!parseConfigAPI(cfg, videoDir)) {
+    if (!parseConfigAPI(cfg, rcd, videoDir)) {
         cout << "Parsing Error!\n";
         return -1;
     }
 
-    if (!initModel(cfg)) {
+    if (!initModel(cfg, rcd)) {
         cout << "Initialization of the solution failed!\n";
         return -1;
     }
@@ -110,7 +111,7 @@ int main() {
             end = clock();
 
             for (int b = 0; b < odBatchSize; b++) {
-                drawBoxes(cfg, frames[b], dboxesMulP[b], vchIDs[b]);
+                drawBoxes(cfg, rcd, frames[b], dboxesMulP[b], vchIDs[b]);
                 (videoDir[vchIDs[b]]) << frames[b];  // write a frame
             }
 
@@ -122,7 +123,7 @@ int main() {
                 inf1s.push_back(inf1);
             }
 
-            // printRecord(cfg.rcd, frameCnt);  // print the record
+            // printRecord(rcd, frameCnt);  // print the record
             cout << "Frame " << frameCnt << ">\t"
                  << "OD+Track+PAR: " << inf0 << "ms\t"
                  << "POSE+ACT: " << inf1 << "ms\n";
@@ -208,11 +209,11 @@ void printRecord(Record &rcd, unsigned int frameCnt) {
     }
 }
 
-void drawZones(Config &cfg, Mat &img, int vchID, double alpha) {
+void drawZones(Record &rcd, Mat &img, int vchID, double alpha) {
     int np[1] = {4};
     cv::Mat layer;
 
-    for (Zone &zone : cfg.rcd.zones) {
+    for (Zone &zone : rcd.zones) {
         if (zone.vchID == vchID) {
             if (layer.empty())
                 layer = img.clone();
@@ -227,7 +228,7 @@ void drawZones(Config &cfg, Mat &img, int vchID, double alpha) {
         cv::addWeighted(img, alpha, layer, 1 - alpha, 0, img);
 }
 
-void drawBoxes(Config &cfg, Mat &img, vector<DetBox *> &dboxesP, int vchID, double alpha,
+void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox *> &dboxesP, int vchID, double alpha,
                const vector<pair<int, int>> &skelPairs) {
     const string *objNames = cfg.odIDMapping.data();
     time_t now = time(NULL);
@@ -253,8 +254,9 @@ void drawBoxes(Config &cfg, Mat &img, vector<DetBox *> &dboxesP, int vchID, doub
 
             Scalar boxColor(50, 255, 255);
             // string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
-            string objName =
-                to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
+            // string objName = to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 +
+            // 0.5)) + "%)";
+            string objName = to_string(dbox.trackID);
 
             // char buf[80];
             // tm *curTm = localtime(&dbox.inTime);
@@ -339,13 +341,13 @@ void drawBoxes(Config &cfg, Mat &img, vector<DetBox *> &dboxesP, int vchID, doub
     }
 
     if (DRAW_ZONE)
-        drawZones(cfg, img, vchID, alpha);
+        drawZones(rcd, img, vchID, alpha);
 
     // draw par results
     if (DRAW_ZONE_COUNTING && cfg.parEnable) {
         vector<string> texts = {"People Counting for Each Zone"};
 
-        for (Zone &zone : cfg.rcd.zones) {
+        for (Zone &zone : rcd.zones) {
             if (vchID == zone.vchID) {
                 int curMTotal, curFTotal;
                 curMTotal = zone.curPeople[0][0] + zone.curPeople[0][1] + zone.curPeople[0][2];
@@ -376,7 +378,7 @@ void drawBoxes(Config &cfg, Mat &img, vector<DetBox *> &dboxesP, int vchID, doub
     }
 
     if (DRAW_CNTLINE) {
-        for (CntLine &cntLine : cfg.rcd.cntLines) {
+        for (CntLine &cntLine : rcd.cntLines) {
             if (vchID == cntLine.vchID)
                 line(img, cntLine.pts[0], cntLine.pts[1], Scalar(0, 255, 0), 2, LINE_8);
         }
@@ -386,7 +388,7 @@ void drawBoxes(Config &cfg, Mat &img, vector<DetBox *> &dboxesP, int vchID, doub
     if (DRAW_CNTLINE_COUNTING && cfg.parEnable) {
         vector<string> texts = {"People Counting for Each Line"};
 
-        for (CntLine &cntLine : cfg.rcd.cntLines) {
+        for (CntLine &cntLine : rcd.cntLines) {
             if (vchID == cntLine.vchID) {
                 int upMTotal, upFTotal;
                 upMTotal = cntLine.totalUL[0][0] + cntLine.totalUL[0][1] + cntLine.totalUL[0][2];
@@ -417,12 +419,13 @@ void drawBoxes(Config &cfg, Mat &img, vector<DetBox *> &dboxesP, int vchID, doub
     }
 }
 
-bool parseConfigAPI(Config &cfg, VideoDir &videoDir) {
+bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir) {
     string jsonCfgFile = CFG_FILEPATH;
     std::ifstream cfgFile(jsonCfgFile);
     json js;
     cfgFile >> js;
 
+    // apikey, gpu_id
     cfg.frameLimit = js["global"]["frame_limit"];
     cfg.key = js["global"]["apikey"];
 
@@ -518,7 +521,7 @@ bool parseConfigAPI(Config &cfg, VideoDir &videoDir) {
             }
         }
 
-        cfg.rcd.cntLines.push_back(cntLine);
+        rcd.cntLines.push_back(cntLine);
     }
 
     // zones
@@ -551,7 +554,7 @@ bool parseConfigAPI(Config &cfg, VideoDir &videoDir) {
             }
         }
 
-        cfg.rcd.zones.push_back(zone);
+        rcd.zones.push_back(zone);
     }
 
     return true;
