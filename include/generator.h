@@ -25,28 +25,16 @@ GENERATOR_API bool initModel(Config &cfg, Record &rcd);
 
 /** @brief Run detection and PAR models for a frame batch
  *
- * @param dboxesMulP return pointers of detected dboxes of all video channels(vchIDs)
+ * @param dboxesMulP return detected dboxes of all video channels(vchIDs)
  * @param frames batch of frames
  * @param vchIDs vchIDs of batched frames
  * @param frameCnts frameCnts of batched frames
  * @param odScoreTh threshold for filtering low confident detections
- * @return flag for the running result(true: success, false: fail)
- */
-GENERATOR_API bool runModel(std::vector<std::vector<DetBox *>> &dboxesMulP, std::vector<cv::Mat> &frames,
-                            std::vector<int> &vchIDs, std::vector<uint> &frameCnts, float odScoreTh);
-
-/** @brief Run Pose and Action models for the detected dboxesMul
- *
- * @param dboxesMul return extracted Skeletons for the inserted dboxesMul
- * @param frames batch of frames
- * @param vchIDs vchIDs of batched frames
- * @param frameCnts frameCnts of batched frames
- * @param dboxesMulP pointers of detected dboxes of batched frames in runModel
  * @param actScoreTh threshold for filtering low confident actions
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModelAct(std::vector<std::vector<DetBox *>> &dboxesMulP, std::vector<cv::Mat> &frames,
-                               std::vector<int> &vchIDs, std::vector<uint> &frameCnts, float actScoreTh);
+GENERATOR_API bool runModel(std::vector<std::vector<DetBox>> &dboxesMul, std::vector<cv::Mat> &frames,
+                            std::vector<int> &vchIDs, std::vector<uint> &frameCnts, float odScoreTh, float actScoreTh);
 
 /** @brief Destroy all models
  *

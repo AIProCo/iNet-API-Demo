@@ -42,7 +42,7 @@ void printRecord(Record &rcd, unsigned int frameCnt);  // just for printing (can
 bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir);
 
 void drawZones(Record &rcd, Mat &img, int vchID, double alpha);
-void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox *> &dboxesP, int vchID, double alpha = 0.3,
+void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha = 0.3,
                const vector<pair<int, int>> &skelPairs = cocoSkeletons);
 
 int main() {
@@ -69,7 +69,7 @@ int main() {
     vector<int> vchIDs;
     vector<unsigned int> frameCnts;
     clock_t start, middle, end;
-    vector<float> inf0s, inf1s;
+    vector<float> infs;
 
     while (1) {
         frameCnt++;
@@ -94,39 +94,29 @@ int main() {
             if (frames.size() < odBatchSize)
                 continue;
 
-            vector<vector<DetBox *>> dboxesMulP;
+            vector<vector<DetBox>> dboxesMul;
 
             start = clock();
 
-            // batch inference for Detection and PAR. Detection, tracking, and PAR results are stored
-            if (!runModel(dboxesMulP, frames, vchIDs, frameCnts, cfg.odScoreTh))
-                break;
-
-            middle = clock();
-
-            // batch inference for Pose and Action. Skeletion and Action results are stored(to be implemented)
-            if (!runModelAct(dboxesMulP, frames, vchIDs, frameCnts, cfg.actScoreTh))
+            // batch inference for all models
+            if (!runModel(dboxesMul, frames, vchIDs, frameCnts, cfg.odScoreTh, cfg.actScoreTh))
                 break;
 
             end = clock();
 
             for (int b = 0; b < odBatchSize; b++) {
-                drawBoxes(cfg, rcd, frames[b], dboxesMulP[b], vchIDs[b]);
+                drawBoxes(cfg, rcd, frames[b], dboxesMul[b], vchIDs[b]);
                 (videoDir[vchIDs[b]]) << frames[b];  // write a frame
             }
 
-            float inf0 = (middle - start) / odBatchSize;
-            float inf1 = (end - middle) / odBatchSize;
+            float inf = (end - start) / odBatchSize;
 
-            if (frameCnt > 10 && frameCnt < 500) {  // skip the start frames and limit the number of elements
-                inf0s.push_back(inf0);
-                inf1s.push_back(inf1);
-            }
+            if (frameCnt > 10 && frameCnt < 500)  // skip the start frames and limit the number of elements
+                infs.push_back(inf);
 
             // printRecord(rcd, frameCnt);  // print the record
             cout << "Frame " << frameCnt << ">\t"
-                 << "OD+Track+PAR: " << inf0 << "ms\t"
-                 << "POSE+ACT: " << inf1 << "ms\n";
+                 << "Inference time: " << inf << "ms\n";
 
             frames.clear();
             vchIDs.clear();
@@ -139,18 +129,16 @@ int main() {
 
     destroyModel();  // destroy all models
 
-    if (inf0s.size() > 1) {
-        float avgInf0 = accumulate(inf0s.begin(), inf0s.end(), 0) / inf0s.size();
-        float avgInf1 = accumulate(inf1s.begin(), inf1s.end(), 0) / inf1s.size();
-
-        cout << "\nAverage Inference Time> "
-             << "OD+Track+PAR: " << avgInf0 << "ms\t"
-             << "POSE+ACT: " << avgInf1 << "ms\n";
+    if (infs.size() > 1) {
+        float avgInf = accumulate(infs.begin(), infs.end(), 0) / infs.size();
+        cout << "\nAverage Inference Time: " << avgInf << "ms\n";
+        cout << "  -OD & Tracking: " << cfg.odEnable << "\n  -PAR: " << cfg.parEnable << "\n  -POSE: " << cfg.poseEnable
+             << "\n  -ACT: " << cfg.actEnable << endl;
     }
 
     cout << "\nOutput file(s):\n";
     for (auto &outFile : cfg.outputFiles)
-        cout << "\t" << outFile << endl;
+        cout << "  -" << outFile << endl;
 
     cout << "\nTerminate program!\n";
 
@@ -228,7 +216,7 @@ void drawZones(Record &rcd, Mat &img, int vchID, double alpha) {
         cv::addWeighted(img, alpha, layer, 1 - alpha, 0, img);
 }
 
-void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox *> &dboxesP, int vchID, double alpha,
+void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha,
                const vector<pair<int, int>> &skelPairs) {
     const string *objNames = cfg.odIDMapping.data();
     time_t now = time(NULL);
@@ -239,9 +227,7 @@ void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox *> &dboxesP, in
     vector<vector<string>> boxTexts;
 
     if (DRAW_DETECTION) {
-        for (auto &dboxP : dboxesP) {
-            DetBox &dbox = (*dboxP);
-
+        for (auto &dbox : dboxes) {
             if (dbox.objID >= cfg.numClasses)
                 continue;
 
@@ -254,9 +240,8 @@ void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox *> &dboxesP, in
 
             Scalar boxColor(50, 255, 255);
             // string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
-            // string objName = to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 +
-            // 0.5)) + "%)";
-            string objName = to_string(dbox.trackID);
+            string objName = to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
+            //string objName = to_string(dbox.trackID);
 
             // char buf[80];
             // tm *curTm = localtime(&dbox.inTime);
@@ -309,7 +294,7 @@ void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox *> &dboxesP, in
             boxesColor.push_back(boxColor);
             boxTexts.push_back(texts);
 
-            if ((DRAW_CNTLINE && dbox.justCountedLine > 0) || (DRAW_ZONE && dbox.justCountedZone > 0))
+            if ((DRAW_CNTLINE && (dbox.justCountedLine > 0)) || (DRAW_ZONE && (dbox.justCountedZone > 0)))
                 emphasizes.push_back(true);
             else
                 emphasizes.push_back(false);
@@ -453,7 +438,7 @@ bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir) {
     cfg.netWidth = 960;   // fixed
     cfg.netHeight = 544;  // fixed
     cfg.odScoreTh = js["od"]["score_th"];
-    cfg.odBatchSize = 1;  // from 1 to 8
+    cfg.odBatchSize = 8;  // from 1 to 8
     cfg.odIDMapping = {"person"};
     // cfg.odIDMapping = {"person", "bycle", "car", "motorcycle", "airplane", "bus", "train", "truck"};
     cfg.numClasses = cfg.odIDMapping.size();
@@ -466,9 +451,9 @@ bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir) {
     cfg.parEnable = js["par"]["enable"];
     cfg.parModelFile = PAR_MD_FILEPATH;
     cfg.parIDMapping = {"gender", "child", "adult", "elder"};
-    cfg.numAtts = cfg.parIDMapping.size();
+    cfg.numAtts = NUM_ATTRIBUTES;
     cfg.attUpdatePeriod = 10;
-    cfg.parBatchSize = 2;  // fixed
+    cfg.parBatchSize = 2;
 
     // pose config
     cfg.poseEnable = js["pose"]["enable"];
