@@ -2,14 +2,15 @@
 
 - This is a repository for demo of iNet-API developped by AIPro Inc.
   + iNet: AIPro Deep Learning Solution supporting the following functionalities:
-     - Object Detection
+     - Object Detection 
      - Object Tracking
      - Pedestrian Attribute Recognition
      - Pose Estimation
      - Action Recognition
      - Pedestrian Counting & Zone Hitmap Estimation
+     - Fire Detection
 
-- In this demo, the number of inferences is limited to 6000.
+- In this demo, the number of inferences is limited to 1000.
 - Commercial use must be approved by AIPro Inc.
   
 ------------------
@@ -29,7 +30,7 @@
 ### **Download and extract files**
 - Download and upzip the followings zip files. Then, copy and paste bin, inputs, and videos directories to the solution directory (the directory including the `.sln` file):
   + Cuda compute capability of your GPU should be 8.6 or later(ex: RTX 30xx): 
-    - https://drive.google.com/file/d/13-nF_Isul1cMLa6xR0YlGPA8HyLQARVY/view?usp=share_link
+    - https://drive.google.com/file/d/1pnwi1is57lXCYIX0TPlZ8-BJLfzWBsds/view?usp=share_link
 
 ### **Run the project**
 
