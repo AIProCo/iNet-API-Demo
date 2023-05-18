@@ -1,5 +1,5 @@
 /*==============================================================================
-* Copyright 2022 AIPro Inc.
+* Copyright 2023 AIPro Inc.
 * Author: Chun-Su Park (cspk@skku.edu)
 =============================================================================*/
 #include <fstream>
@@ -23,22 +23,13 @@
 #define DRAW_DETECTION true
 #define DRAW_FIRE_DETECTION true
 #define DRAW_FIRE_DETECTION_COUNTING true
-#define DRAW_POSE false
-#define DRAW_ACTION false
+#define DRAW_POSE true
+#define DRAW_ACTION true
 #define DRAW_CNTLINE true
 #define DRAW_CNTLINE_COUNTING true
 #define DRAW_ZONE true
 #define DRAW_ZONE_COUNTING true
 
-/* Original model names
-aipro_od_1_3: yolov8l_nms_d_opt4_fp16.net
-aipro_od_1_3_CPU: yolov8n_q.xml
-aipro_fd_1_3: yolov8l_fd_nms_d_opt4_fp16.net
-aipro_fd_1_3_CPU: yolov8l_fd_q.xml
-aipro_par_1_3: swin_s3_tiny_224_hrp_adamw_ema_b64_fp16.net
-aipro_par_1_3_CPU: swin_s3_tiny_224_hrp_adamw_ema_b64.xml
-aipro_pose_1_3: aipro_pose_1_2
-*/
 #define CFG_FILEPATH "inputs/config.json"
 
 #define OD_MD_FILEPATH "inputs/aipro_od_1_3.net"
