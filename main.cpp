@@ -4,7 +4,7 @@
 =============================================================================*/
 #include <fstream>
 #include <iostream>
-#include <vector>
+#include <numeric>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -21,41 +21,62 @@
 #include "util.h"
 
 #define DRAW_DETECTION true
-#define DRAW_POSE true
-#define DRAW_ACTION true
+#define DRAW_FIRE_DETECTION true
+#define DRAW_FIRE_DETECTION_COUNTING true
+#define DRAW_POSE false
+#define DRAW_ACTION false
 #define DRAW_CNTLINE true
 #define DRAW_CNTLINE_COUNTING true
 #define DRAW_ZONE true
 #define DRAW_ZONE_COUNTING true
 
+/* Original model names
+aipro_od_1_3: yolov8l_nms_d_opt4_fp16.net
+aipro_od_1_3_CPU: yolov8n_q.xml
+aipro_fd_1_3: yolov8l_fd_nms_d_opt4_fp16.net
+aipro_fd_1_3_CPU: yolov8l_fd_q.xml
+aipro_par_1_3: swin_s3_tiny_224_hrp_adamw_ema_b64_fp16.net
+aipro_par_1_3_CPU: swin_s3_tiny_224_hrp_adamw_ema_b64.xml
+aipro_pose_1_3: aipro_pose_1_2
+*/
 #define CFG_FILEPATH "inputs/config.json"
-#define OD_MD_FILEPATH "inputs/aipro_od_1_2.net"
-#define PAR_MD_FILEPATH "inputs/aipro_par_1_2.net"
-#define POSE_MD_FILEPATH "inputs/aipro_pose_1_2.net"
+
+#define OD_MD_FILEPATH "inputs/aipro_od_1_3.net"
+#define OD_MD_CPU_FILEPATH "inputs/aipro_od_1_3_s.nez"
+
+#define FD_MD_FILEPATH "inputs/aipro_fd_1_3.net"
+#define FD_MD_CPU_FILEPATH "inputs/aipro_fd_1_3.nez"
+
+#define PAR_MD_FILEPATH "inputs/aipro_par_1_3.net"
+#define PAR_MD_CPU_FILEPATH "inputs/aipro_par_1_3.nez"
+
+#define POSE_MD_FILEPATH "inputs/aipro_pose_1_3.net"
 #define ACT_MD_FILEPATH "inputs/aipro_act_1_3.net"
 
 using namespace std;
 using namespace cv;
 using json = nlohmann::json;
 
-void printRecord(Record &rcd, unsigned int frameCnt);  // just for printing (can be omitted)
-bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir);
+void printRecord(ODRecord &odRcd, unsigned int frameCnt);  // just for printing (can be omitted)
+bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, VideoDir &videoDir);
 
-void drawZones(Record &rcd, Mat &img, int vchID, double alpha);
-void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha = 0.3,
+void drawZones(ODRecord &odRcd, Mat &img, int vchID, double alpha);
+void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha = 0.7,
                const vector<pair<int, int>> &skelPairs = cocoSkeletons);
+void drawBoxesFD(Config &cfg, FDRecord &fdRcd, Mat &img, vector<FireBox> &fboxes, int vchID);
 
 int main() {
     Config cfg;
-    Record rcd;
+    ODRecord odRcd;
+    FDRecord fdRcd;
     VideoDir videoDir;
 
-    if (!parseConfigAPI(cfg, rcd, videoDir)) {
+    if (!parseConfigAPI(cfg, odRcd, fdRcd, videoDir)) {
         cout << "Parsing Error!\n";
         return -1;
     }
 
-    if (!initModel(cfg, rcd)) {
+    if (!initModel(cfg, odRcd, fdRcd)) {
         cout << "Initialization of the solution failed!\n";
         return -1;
     }
@@ -69,7 +90,7 @@ int main() {
     vector<int> vchIDs;
     vector<unsigned int> frameCnts;
     clock_t start, middle, end;
-    vector<float> infs;
+    vector<float> infs0, infs1;
 
     while (1) {
         frameCnt++;
@@ -94,7 +115,7 @@ int main() {
             if (frames.size() < odBatchSize)
                 continue;
 
-            vector<vector<DetBox>> dboxesMul;
+            vector<vector<DetBox>> dboxesMul(odBatchSize);
 
             start = clock();
 
@@ -102,21 +123,32 @@ int main() {
             if (!runModel(dboxesMul, frames, vchIDs, frameCnts, cfg.odScoreTh, cfg.actScoreTh))
                 break;
 
+            middle = clock();
+
+            vector<vector<FireBox>> fboxesMul(odBatchSize);
+
+            // batch inference for all models
+            if (!runModelFD(fboxesMul, frames, vchIDs, frameCnts, cfg.fdScoreTh))
+                break;
+
             end = clock();
 
-            for (int b = 0; b < odBatchSize; b++) {
-                drawBoxes(cfg, rcd, frames[b], dboxesMul[b], vchIDs[b]);
+            for (int b = 0; b < odBatchSize; b++) {  // odBatchSize should be used instead of fdBatchSize
+                drawBoxes(cfg, odRcd, frames[b], dboxesMul[b], vchIDs[b]);
+                drawBoxesFD(cfg, fdRcd, frames[b], fboxesMul[b], vchIDs[b]);
                 (videoDir[vchIDs[b]]) << frames[b];  // write a frame
             }
 
-            float inf = (end - start) / odBatchSize;
+            float inf0 = (middle - start) / odBatchSize;
+            float inf1 = (end - middle) / odBatchSize;
 
-            if (frameCnt > 10 && frameCnt < 500)  // skip the start frames and limit the number of elements
-                infs.push_back(inf);
+            if (frameCnt > 10 && frameCnt < 500) {  // skip the start frames and limit the number of elements
+                infs0.push_back(inf0);
+                infs1.push_back(inf1);
+            }
 
-            // printRecord(rcd, frameCnt);  // print the record
-            cout << "Frame " << frameCnt << ">\t"
-                 << "Inference time: " << inf << "ms\n";
+            // printRecord(odRcd, frameCnt);  // print the record
+            cout << "Frame " << frameCnt << ">\t" << "OD&PAR&ACT: " << inf0 << "ms," << "\tFD: " << inf1 << "ms\n";
 
             frames.clear();
             vchIDs.clear();
@@ -129,11 +161,13 @@ int main() {
 
     destroyModel();  // destroy all models
 
-    if (infs.size() > 1) {
-        float avgInf = accumulate(infs.begin(), infs.end(), 0) / infs.size();
-        cout << "\nAverage Inference Time: " << avgInf << "ms\n";
-        cout << "  -OD & Tracking: " << cfg.odEnable << "\n  -PAR: " << cfg.parEnable << "\n  -POSE: " << cfg.poseEnable
-             << "\n  -ACT: " << cfg.actEnable << endl;
+    if (infs0.size() > 1) {
+        float avgInf0 = accumulate(infs0.begin(), infs0.end(), 0) / infs0.size();
+        float avgInf1 = accumulate(infs1.begin(), infs1.end(), 0) / infs1.size();
+        cout << "\nAverage>\tOD&PAR&ACT: " << avgInf0 << "ms," << "\tFD: " << avgInf0 << "ms\n";
+        cout << "\nModel Configure:";
+        cout << "\n  -OD & Tracking: " << cfg.odEnable << "\n  -FD:" << cfg.fdEnable << "\n  -PAR: " << cfg.parEnable
+             << "\n  -POSE: " << cfg.poseEnable << "\n  -ACT: " << cfg.actEnable << endl;
     }
 
     cout << "\nOutput file(s):\n";
@@ -145,7 +179,7 @@ int main() {
     return 0;
 }
 
-void printRecord(Record &rcd, unsigned int frameCnt) {
+void printRecord(ODRecord &odRcd, unsigned int frameCnt) {
 #ifdef _WIN32
     HANDLE hStdout;
     COORD destCoord;
@@ -158,8 +192,8 @@ void printRecord(Record &rcd, unsigned int frameCnt) {
 #endif
 
     cout << "Zone History               \n";  // spaces needed
-    for (int i = 0; i < rcd.zones.size(); i++) {
-        Zone &zone = rcd.zones[i];
+    for (int i = 0; i < odRcd.zones.size(); i++) {
+        Zone &zone = odRcd.zones[i];
         int cM = zone.curPeople[0][0] + zone.curPeople[0][1] + zone.curPeople[0][2];
         int cF = zone.curPeople[1][0] + zone.curPeople[1][1] + zone.curPeople[1][2];
 
@@ -177,8 +211,8 @@ void printRecord(Record &rcd, unsigned int frameCnt) {
     }
 
     cout << "\nCounting Line History\n";
-    for (int i = 0; i < rcd.cntLines.size(); i++) {
-        CntLine &cline = rcd.cntLines[i];
+    for (int i = 0; i < odRcd.cntLines.size(); i++) {
+        CntLine &cline = odRcd.cntLines[i];
 
         int uM = cline.totalUL[0][0] + cline.totalUL[0][1] + cline.totalUL[0][2];
         int uF = cline.totalUL[1][0] + cline.totalUL[1][1] + cline.totalUL[1][2];
@@ -197,11 +231,11 @@ void printRecord(Record &rcd, unsigned int frameCnt) {
     }
 }
 
-void drawZones(Record &rcd, Mat &img, int vchID, double alpha) {
+void drawZones(ODRecord &odRcd, Mat &img, int vchID, double alpha) {
     int np[1] = {4};
     cv::Mat layer;
 
-    for (Zone &zone : rcd.zones) {
+    for (Zone &zone : odRcd.zones) {
         if (zone.vchID == vchID) {
             if (layer.empty())
                 layer = img.clone();
@@ -216,7 +250,7 @@ void drawZones(Record &rcd, Mat &img, int vchID, double alpha) {
         cv::addWeighted(img, alpha, layer, 1 - alpha, 0, img);
 }
 
-void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha,
+void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha,
                const vector<pair<int, int>> &skelPairs) {
     const string *objNames = cfg.odIDMapping.data();
     time_t now = time(NULL);
@@ -240,8 +274,9 @@ void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox> &dboxes, int v
 
             Scalar boxColor(50, 255, 255);
             // string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
-            string objName = to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
-            //string objName = to_string(dbox.trackID);
+            string objName =
+                to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
+            // string objName = to_string(dbox.trackID);
 
             // char buf[80];
             // tm *curTm = localtime(&dbox.inTime);
@@ -251,7 +286,7 @@ void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox> &dboxes, int v
             vector<string> texts{objName};
             // vector<string> texts{objName, timeInfo};
 
-            if (label == PERSON && cfg.parEnable) {
+            if (label == PERSON) {
                 string trkInfo;
                 int period = now - dbox.inTime;
                 if (period < cfg.longLastingObjTh) {  // no action
@@ -264,30 +299,33 @@ void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox> &dboxes, int v
                 }
                 texts.push_back(trkInfo);
 
-                string genderInfo, ageGroupInfo;
-                bool isFemale;
-                int probFemale;
-                int ageGroup, probAgeGroup;
+                if (cfg.parEnable && dbox.patts.setCnt != -1) {
+                    string genderInfo, ageGroupInfo;
+                    bool isFemale;
+                    int probFemale;
+                    int ageGroup, probAgeGroup;
 
-                PedAtts::getGenderAtt(dbox.patts, isFemale, probFemale);
-                genderInfo = "Gen: " + string((isFemale ? "F" : "M")) + " (" + to_string(probFemale) + "%)";
-                texts.push_back(genderInfo);
+                    PedAtts::getGenderAtt(dbox.patts, isFemale, probFemale);
+                    genderInfo = "Gen: " + string((isFemale ? "F" : "M")) + " (" + to_string(probFemale) + "%)" +
+                                 to_string(dbox.patts.setCnt);
+                    texts.push_back(genderInfo);
 
-                boxColor = isFemale ? Scalar(50, 50, 255) : Scalar(255, 80, 80);
-                PedAtts::getAgeGroupAtt(dbox.patts, ageGroup, probAgeGroup);
-                ageGroupInfo =
-                    "Age: " +
-                    string(ageGroup == CHILD_GROUP ? "child" : (ageGroup == ADULT_GROUP ? "adult" : "elder")) + " (" +
-                    to_string(probAgeGroup) + "%)";
-                texts.push_back(ageGroupInfo);
-            }
+                    boxColor = isFemale ? Scalar(80, 80, 255) : Scalar(255, 80, 80);
+                    PedAtts::getAgeGroupAtt(dbox.patts, ageGroup, probAgeGroup);
+                    ageGroupInfo =
+                        "Age: " +
+                        string(ageGroup == CHILD_GROUP ? "child" : (ageGroup == ADULT_GROUP ? "adult" : "elder")) +
+                        " (" + to_string(probAgeGroup) + "%)";
+                    texts.push_back(ageGroupInfo);
+                }
 
-            if (label == PERSON && cfg.actEnable && DRAW_ACTION) {
-                if (dbox.actID != -1) {
-                    string actInfo;
-                    actInfo = "Action: " + cfg.actIDMapping[dbox.actID] + " (" + to_string((int)(dbox.actConf * 100)) +
-                              "%)-" + to_string(dbox.actSetCnt);
-                    texts.push_back(actInfo);
+                if (cfg.actEnable && DRAW_ACTION) {
+                    if (dbox.actID != -1) {
+                        string actInfo;
+                        actInfo = "Action: " + cfg.actIDMapping[dbox.actID] + " (" +
+                                  to_string((int)(dbox.actConf * 100)) + "%)-" + to_string(dbox.actSetCnt);
+                        texts.push_back(actInfo);
+                    }
                 }
             }
 
@@ -326,13 +364,13 @@ void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox> &dboxes, int v
     }
 
     if (DRAW_ZONE)
-        drawZones(rcd, img, vchID, alpha);
+        drawZones(odRcd, img, vchID, alpha);
 
     // draw par results
-    if (DRAW_ZONE_COUNTING && cfg.parEnable) {
+    if (DRAW_ZONE_COUNTING) {
         vector<string> texts = {"People Counting for Each Zone"};
 
-        for (Zone &zone : rcd.zones) {
+        for (Zone &zone : odRcd.zones) {
             if (vchID == zone.vchID) {
                 int curMTotal, curFTotal;
                 curMTotal = zone.curPeople[0][0] + zone.curPeople[0][1] + zone.curPeople[0][2];
@@ -359,21 +397,21 @@ void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox> &dboxes, int v
             }
         }
 
-        Vis::drawTextBlock(img, Point(18, 40), texts, 1, 2);
+        Vis::drawTextBlock(img, Point(18, 500), texts, 1, 2);
     }
 
     if (DRAW_CNTLINE) {
-        for (CntLine &cntLine : rcd.cntLines) {
+        for (CntLine &cntLine : odRcd.cntLines) {
             if (vchID == cntLine.vchID)
-                line(img, cntLine.pts[0], cntLine.pts[1], Scalar(0, 255, 0), 2, LINE_8);
+                line(img, cntLine.pts[0], cntLine.pts[1], Scalar(50, 255, 50), 2, LINE_8);
         }
     }
 
     // draw couniting results
-    if (DRAW_CNTLINE_COUNTING && cfg.parEnable) {
+    if (DRAW_CNTLINE_COUNTING) {
         vector<string> texts = {"People Counting for Each Line"};
 
-        for (CntLine &cntLine : rcd.cntLines) {
+        for (CntLine &cntLine : odRcd.cntLines) {
             if (vchID == cntLine.vchID) {
                 int upMTotal, upFTotal;
                 upMTotal = cntLine.totalUL[0][0] + cntLine.totalUL[0][1] + cntLine.totalUL[0][2];
@@ -400,11 +438,73 @@ void drawBoxes(Config &cfg, Record &rcd, Mat &img, vector<DetBox> &dboxes, int v
             }
         }
 
-        Vis::drawTextBlock(img, Point(18, 500), texts, 1, 2);
+        Vis::drawTextBlock(img, Point(18, 40), texts, 1, 2);
     }
 }
 
-bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir) {
+void drawBoxesFD(Config &cfg, FDRecord &fdRcd, Mat &img, vector<FireBox> &fboxes, int vchID) {
+    const string *objNames = cfg.fdIDMapping.data();
+    time_t now = time(NULL);
+
+    vector<Rect> boxes;
+    vector<Scalar> boxesColor;
+    vector<vector<string>> boxTexts;
+
+    if (DRAW_FIRE_DETECTION) {
+        for (auto &fbox : fboxes) {
+            if (fbox.objID >= NUM_CLASSES_FD)  // draw only the fire
+                continue;
+
+            Rect box(fbox.x, fbox.y, fbox.w, fbox.h);
+            boxes.push_back(box);
+
+            int label = fbox.objID;
+            if (fbox.prob < cfg.fdScoreTh)
+                continue;  // should check scores are ordered. Otherwise, use continue
+
+            string objName = objNames[label] + "(" + to_string((int)(fbox.prob * 100 + 0.5)) + "%)";
+
+            Scalar boxColor;
+            if (label == FIRE)
+                boxColor = Scalar(0, 0, 255);
+            else
+                boxColor = Scalar(220, 200, 200);
+
+            char buf[80];
+            tm *curTm = localtime(&now);
+            strftime(buf, sizeof(buf), "Time: %H:%M:%S", curTm);
+            string timeInfo = string(buf);
+
+            // vector<string> texts{objName};
+            vector<string> texts{objName, timeInfo};
+
+            boxesColor.push_back(boxColor);
+            boxTexts.push_back(texts);
+        }
+
+        Vis::drawBoxesFD(img, boxes, boxesColor, boxTexts);
+    }
+
+    if (DRAW_FIRE_DETECTION_COUNTING) {
+        int numFire = 0, numSmoke = 0;
+
+        for (auto &fbox : fboxes) {
+            if (fbox.prob < cfg.fdScoreTh)
+                continue;  // should check scores are ordered. Otherwise, use continue
+
+            if (fbox.objID == FIRE)  // draw only the fire
+                numFire++;
+
+            if (fbox.objID == SMOKE)  // draw only the fire
+                numSmoke++;
+        }
+
+        string fdText = "Detection: Fire=" + to_string(numFire) + ", Smoke=" + to_string(numSmoke);
+        Vis::drawTextBlockFD(img, fdRcd, vchID, 40, fdText, 1, 2);
+    }
+}
+
+bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, VideoDir &videoDir) {
     string jsonCfgFile = CFG_FILEPATH;
     std::ifstream cfgFile(jsonCfgFile);
     json js;
@@ -413,7 +513,6 @@ bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir) {
     // apikey, gpu_id
     cfg.frameLimit = js["global"]["frame_limit"];
     cfg.key = js["global"]["apikey"];
-
     cfg.inputFiles = js["global"]["input_files"].get<vector<string>>();
     cfg.outputFiles = js["global"]["output_files"].get<vector<string>>();
 
@@ -433,36 +532,43 @@ bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir) {
                              true);  // you can select main channels to which action recognition is applied
 
     // od config
-    cfg.odEnable = true;
-    cfg.odModelFile = OD_MD_FILEPATH;
+    cfg.odEnable = js["od"]["enable"];
     cfg.netWidth = 960;   // fixed
     cfg.netHeight = 544;  // fixed
     cfg.odScoreTh = js["od"]["score_th"];
-    cfg.odBatchSize = 8;  // from 1 to 8
     cfg.odIDMapping = {"person"};
     // cfg.odIDMapping = {"person", "bycle", "car", "motorcycle", "airplane", "bus", "train", "truck"};
     cfg.numClasses = cfg.odIDMapping.size();
 
+    // fd config
+    cfg.fdEnable = js["fd"]["enable"];
+    cfg.fdNetWidth = 960;   // fixed
+    cfg.fdNetHeight = 544;  // fixed
+    cfg.fdBatchSize = 1;    // fixed(but support from 1 to 4)
+    cfg.fdScoreTh = js["fd"]["score_th"];
+    cfg.fdIDMapping = {"smoke", "fire"};
+    cfg.fdNumClasses = cfg.fdIDMapping.size();
+    cfg.fdWindowSize = 32;
+    cfg.fdPeriod = 30;
+
     // tracking
     cfg.longLastingObjTh = 300;
     cfg.noMoveTh = 3.0f;
+    cfg.lineEmphasizePeroid = 15;
 
     // par config
     cfg.parEnable = js["par"]["enable"];
-    cfg.parModelFile = PAR_MD_FILEPATH;
+    cfg.parBatchSize = 1;  // fixed
     cfg.parIDMapping = {"gender", "child", "adult", "elder"};
     cfg.numAtts = NUM_ATTRIBUTES;
-    cfg.attUpdatePeriod = 10;
-    cfg.parBatchSize = 2;
+    cfg.attUpdatePeriod = 15;
 
     // pose config
-    cfg.poseEnable = js["pose"]["enable"];
     cfg.poseScoreTh = js["pose"]["score_th"];
     cfg.poseModelFile = POSE_MD_FILEPATH;
     cfg.poseBatchSize = 4;
 
     // action config
-    cfg.actEnable = js["act"]["enable"];
     cfg.actScoreTh = js["act"]["score_th"];
     cfg.heatmapScoreTh = 0.25f;
     cfg.actModelFile = ACT_MD_FILEPATH;
@@ -478,7 +584,35 @@ bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir) {
     cfg.maxNumClips = 8;  // 2 * cfg.poseBatchSize;  // can be set to an arbitrary number
 
     // counting
-    cfg.debouncingTh = 10;
+    cfg.debouncingTh = 20;
+
+#ifndef _CPU_INFER
+    cout << "Do inference using GPU\n";
+    cfg.poseEnable = js["pose"]["enable"];
+    cfg.actEnable = js["act"]["enable"];
+
+    cfg.odBatchSize = 1;  // from 1 to 4
+    cfg.odModelFile = OD_MD_FILEPATH;
+
+    cfg.fdModelFile = FD_MD_FILEPATH;
+
+    cfg.parModelFile = PAR_MD_FILEPATH;
+    cfg.parLightMode = true;
+#else
+    cout << "Do inference using CPU\n";
+    cfg.poseEnable = false;
+    cfg.actEnable = false;
+
+    cfg.odBatchSize = 1;  // should be 1
+    cfg.odModelFile = OD_MD_CPU_FILEPATH;
+
+    cfg.fdModelFile = FD_MD_CPU_FILEPATH;
+
+    cfg.parModelFile = PAR_MD_CPU_FILEPATH;
+    cfg.parLightMode = true;
+#endif
+    if (cfg.parLightMode)
+        cfg.lineEmphasizePeroid = min(cfg.lineEmphasizePeroid, cfg.attUpdatePeriod);
 
     // cntline
     vector<vector<int>> cntLineParams = js["line"]["param"].get<vector<vector<int>>>();
@@ -506,7 +640,7 @@ bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir) {
             }
         }
 
-        rcd.cntLines.push_back(cntLine);
+        odRcd.cntLines.push_back(cntLine);
     }
 
     // zones
@@ -539,7 +673,17 @@ bool parseConfigAPI(Config &cfg, Record &rcd, VideoDir &videoDir) {
             }
         }
 
-        rcd.zones.push_back(zone);
+        odRcd.zones.push_back(zone);
+    }
+
+    if (cfg.fdEnable) {
+        fdRcd.fireProbsMul.resize(cfg.numChannels);
+        fdRcd.smokeProbsMul.resize(cfg.numChannels);
+
+        for (int i = 0; i < cfg.numChannels; i++) {
+            fdRcd.fireProbsMul[i].resize(cfg.fdWindowSize, 0.0f);
+            fdRcd.smokeProbsMul[i].resize(cfg.fdWindowSize, 0.0f);
+        }
     }
 
     return true;

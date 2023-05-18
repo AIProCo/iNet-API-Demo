@@ -11,13 +11,13 @@
 /* #undef CV_DISABLE_OPTIMIZATION */
 
 /* Compile for 'real' NVIDIA GPU architectures */
-#define CUDA_ARCH_BIN " 75 80 86"
+#define CUDA_ARCH_BIN ""
 
 /* NVIDIA GPU features are used */
-#define CUDA_ARCH_FEATURES " 75 80 86 86"
+#define CUDA_ARCH_FEATURES ""
 
 /* Compile for 'virtual' NVIDIA PTX architectures */
-#define CUDA_ARCH_PTX " 86"
+#define CUDA_ARCH_PTX ""
 
 /* AMD's Basic Linear Algebra Subprograms Library*/
 /* #undef HAVE_CLAMDBLAS */
@@ -29,23 +29,23 @@
 /* #undef HAVE_CLP */
 
 /* NVIDIA CUDA Runtime API*/
-#define HAVE_CUDA
+/* #undef HAVE_CUDA */
 
 /* NVIDIA CUDA Basic Linear Algebra Subprograms (BLAS) API*/
-#define HAVE_CUBLAS
+/* #undef HAVE_CUBLAS */
 
 /* NVIDIA CUDA Deep Neural Network (cuDNN) API*/
-#define HAVE_CUDNN
+/* #undef HAVE_CUDNN */
 
 /* NVIDIA CUDA Fast Fourier Transform (FFT) API*/
-#define HAVE_CUFFT
+/* #undef HAVE_CUFFT */
 
 /* DirectX */
-/* #undef HAVE_DIRECTX */
-/* #undef HAVE_DIRECTX_NV12 */
+#define HAVE_DIRECTX
+#define HAVE_DIRECTX_NV12
 #define HAVE_D3D11
-/* #undef HAVE_D3D10 */
-/* #undef HAVE_D3D9 */
+#define HAVE_D3D10
+#define HAVE_D3D9
 
 /* Eigen Matrix & Linear Algebra Library */
 /* #undef HAVE_EIGEN */
@@ -82,20 +82,20 @@
 /* #undef HAVE_GDCM */
 
 /* NVIDIA Video Decoding API*/
-#define HAVE_NVCUVID
-#define HAVE_NVCUVID_HEADER
+/* #undef HAVE_NVCUVID */
+/* #undef HAVE_NVCUVID_HEADER */
 /* #undef HAVE_DYNLINK_NVCUVID_HEADER */
 
 /* NVIDIA Video Encoding API*/
 /* #undef HAVE_NVCUVENC */
 
 /* OpenCL Support */
-/* #undef HAVE_OPENCL */
+#define HAVE_OPENCL
 /* #undef HAVE_OPENCL_STATIC */
 /* #undef HAVE_OPENCL_SVM */
 
 /* NVIDIA OpenCL D3D Extensions support */
-/* #undef HAVE_OPENCL_D3D11_NV */
+#define HAVE_OPENCL_D3D11_NV
 
 /* OpenEXR codec */
 #define HAVE_OPENEXR

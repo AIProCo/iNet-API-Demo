@@ -18,10 +18,10 @@
 /** @brief Initialize model
  *
  * @param cfg configuration struct
- * @param rcd record struct
+ * @param odRcd object detection record struct
  * @return initialization result(true: success, false: fail)
  */
-GENERATOR_API bool initModel(Config &cfg, Record &rcd);
+GENERATOR_API bool initModel(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd);
 
 /** @brief Run detection and PAR models for a frame batch
  *
@@ -36,6 +36,19 @@ GENERATOR_API bool initModel(Config &cfg, Record &rcd);
 GENERATOR_API bool runModel(std::vector<std::vector<DetBox>> &dboxesMul, std::vector<cv::Mat> &frames,
                             std::vector<int> &vchIDs, std::vector<uint> &frameCnts, float odScoreTh, float actScoreTh);
 
+/** @brief Run fire detection for a frame batch
+ *
+ * @param fboxesMulP return detected fboxes of all video channels(vchIDs)
+ * @param frames batch of frames
+ * @param vchIDs vchIDs of batched frames
+ * @param frameCnts frameCnts of batched frames
+ * @param fdScoreTh threshold for filtering low confident detections
+ * @return flag for the running result(true: success, false: fail)
+ */
+GENERATOR_API bool runModelFD(std::vector<std::vector<FireBox>> &fboxesMul, 
+                              std::vector<cv::Mat> &frames, std::vector<int> &vchIDs, std::vector<uint> &frameCnts,
+                              float fdScoreTh);
+
 /** @brief Destroy all models
  *
  * @param None
@@ -45,10 +58,10 @@ GENERATOR_API bool destroyModel();
 
 /** @brief Reset CntLine and Zone configuration
  *
- * @param rcd record struct
+ * @param odRcd record struct
  * @return flag for the reset result(true: success, false: fail)
  */
-GENERATOR_API bool resetCntLineAndZone(Record &rcd);
+GENERATOR_API bool resetCntLineAndZone(ODRecord &odRcd);
 
 /** @brief Reset CntLine configuration
  *
@@ -84,3 +97,17 @@ GENERATOR_API bool resetCntLineRecord();
  * @return flag for the reset result(true: success, false: fail)
  */
 GENERATOR_API bool resetZoneRecord();
+
+/** @brief Reset FD
+ *
+ * @param None
+ * @return flag for the reset result(true: success, false: fail)
+ */
+GENERATOR_API bool resetFD(FDRecord *pFDRcd);
+
+/** @brief Reset FD record
+ *
+ * @param None
+ * @return flag for the reset result(true: success, false: fail)
+ */
+GENERATOR_API bool resetFDRecord();
