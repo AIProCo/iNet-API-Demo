@@ -19,6 +19,7 @@
  *
  * @param cfg configuration struct
  * @param odRcd object detection record struct
+ * @param fdRcd fire detection record struct
  * @return initialization result(true: success, false: fail)
  */
 GENERATOR_API bool initModel(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd);
@@ -45,9 +46,8 @@ GENERATOR_API bool runModel(std::vector<std::vector<DetBox>> &dboxesMul, std::ve
  * @param fdScoreTh threshold for filtering low confident detections
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModelFD(std::vector<std::vector<FireBox>> &fboxesMul, 
-                              std::vector<cv::Mat> &frames, std::vector<int> &vchIDs, std::vector<uint> &frameCnts,
-                              float fdScoreTh);
+GENERATOR_API bool runModelFD(std::vector<std::vector<FireBox>> &fboxesMul, std::vector<cv::Mat> &frames,
+                              std::vector<int> &vchIDs, std::vector<uint> &frameCnts, float fdScoreTh);
 
 /** @brief Destroy all models
  *
@@ -100,7 +100,7 @@ GENERATOR_API bool resetZoneRecord();
 
 /** @brief Reset FD
  *
- * @param None
+ * @param odRcd record struct
  * @return flag for the reset result(true: success, false: fail)
  */
 GENERATOR_API bool resetFD(FDRecord *pFDRcd);
