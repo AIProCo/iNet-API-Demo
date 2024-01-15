@@ -14,12 +14,24 @@
 /// System
 #define PERSON 0  /// person should be the first object in a mapping list
 
-#define NUM_CLASSES_FD 2 /// number of fire detection classes(should be compatible with the FD model)
+#define NUM_CLASSES_FD 2  /// number of fire detection classes(should be compatible with the FD model)
 #define SMOKE 0
 #define FIRE 1
 
+#define NET_WIDTH_OD 960   /// net width for od
+#define NET_HEIGHT_OD 544  /// net height for od
+
+#define NET_WIDTH_FD NET_WIDTH_OD    /// net width for fd
+#define NET_HEIGHT_FD NET_HEIGHT_OD  /// net height for fd
+
+#define NUM_CC_LEVELS 4
+#define NET_WIDTH_CC 1920   /// net width for cc
+#define NET_HEIGHT_CC 1080  /// net height for cc
+#define OUT_WIDTH_CC 2048   /// net width for cc
+#define OUT_HEIGHT_CC 1536  /// net height for cc
+
 #define NUM_ATTRIBUTES 30  /// number of attributes(should be compatible with the PAR model)
-#define ATT_GENDER 0      /// gender should be the first att in a mapping list
+#define ATT_GENDER 0       /// gender should be the first att in a mapping list
 #define ATT_AGE_CHILD 1
 #define ATT_AGE_ADULT 2
 #define ATT_AGE_ELDER 3
@@ -67,6 +79,29 @@
 
 #define NUM_SKEL_KEYPOINTS 17
 
+/// data structure
+#define LOG_ENABLE true
+#define AIPRO_PATH "c:/aipro"
+#define ROOT_PATH "c:/aipro/data"
+#define CONFIG_PATH "c:/aipro/data/config"
+#define CHIMGS_PATH "c:/aipro/data/chimgs"
+#define CNT_PATH "c:/aipro/data/cnt"
+#define CC_PATH "c:/aipro/data/cc"
+#define FD_PATH "c:/aipro/data/fd"
+
+/// s2e commands
+#define CMD_INSERT_LINE 0
+#define CMD_REMOVE_LINE 1
+#define CMD_INSERT_ZONE 2
+#define CMD_REMOVE_ZONE 3
+#define CMD_INSERT_CCZONE 4
+#define CMD_REMOVE_CCZONE 5
+#define CMD_CLEARLOG 100
+#define CMD_REMOVE_ALL_LINES_ZONES 101
+#define CMD_REMOVE_ALL_LINES 102
+#define CMD_REMOVE_ALL_ZONES 103
+#define CMD_REMOVE_ALL_CCZONES 104
+
 typedef unsigned char uchar;
 typedef unsigned int uint;
 
@@ -74,7 +109,6 @@ struct Zone {
     bool enabled;                /// enable flag
     int zoneID;                  /// Unique zone id
     int vchID;                   /// vchID where the zone exists
-    bool isRestricted;           /// restricted zone
     std::vector<cv::Point> pts;  /// corner points (should be larger than 2)
 
     int curPeople[NUM_GENDERS][NUM_AGE_GROUPS];  /// current people in the zone
@@ -92,69 +126,86 @@ struct CntLine {
     int totalDR[NUM_GENDERS][NUM_AGE_GROUPS];  // number of total object that move down or right
 };
 
+struct CCZone {
+    bool enabled;                       /// enable flag
+    int ccZoneID;                       /// Unique czone id
+    int vchID;                          /// vchID where the zone exists
+    std::vector<cv::Point> pts;         /// corner points (should be larger than 2)
+    int ccLevelThs[NUM_CC_LEVELS - 1];  /// ccLevel1, ccLevel2, ccLevel3
+    int ccLevel;                        /// current ccLevel
+    cv::Mat mask;                       /// mask
+
+    int maxCC;                              /// for internal usage in logger
+    int maxCCDay;                           /// for internal usage in logger
+    int accCCLevels[NUM_CC_LEVELS - 1];     /// for internal usage in logger
+    int accCCLevelsDay[NUM_CC_LEVELS - 1];  /// for internal usage in logger
+
+    std::deque<int> ccNums;
+};
+
 struct ODRecord {
-	std::vector<Zone> zones;        // zones
-	std::vector<CntLine> cntLines;  // cntLine
+    std::vector<Zone> zones;        // zones
+    std::vector<CntLine> cntLines;  // cntLine
 };
 
 struct FDRecord {
-    std::vector<std::deque<float>> fireProbsMul;     // fire probabi
-    std::vector<std::deque<float>> smokeProbsMul;  // smoke
+    std::vector<std::deque<float>> fireProbsMul;   // fire probability
+    std::vector<std::deque<float>> smokeProbsMul;  // smoke probability
+};
+
+struct CCRecord {
+    std::vector<std::deque<int>> ccNumFrames;
+    std::vector<CCZone> ccZones;  // czones
 };
 
 /// data structure for pedestrian attributes (gender, age, has backpack, etc)
 struct PedAtts {
-	int setCnt;                  /// frame count after the last PAR inference
-	float atts[NUM_ATTRIBUTES];  /// Attributes to be extracted
+    int setCnt;                  /// frame count after the last PAR inference
+    float atts[NUM_ATTRIBUTES];  /// Attributes to be extracted
 
-	static bool getGenderAtt(PedAtts& patts) {
-		return (patts.atts[ATT_GENDER] > 0.5);
-	}
+    static bool getGenderAtt(PedAtts &patts) {
+        return (patts.atts[ATT_GENDER] > 0.5);
+    }
 
-	static void getGenderAtt(PedAtts& patts, bool& isFemale, int& prob) {
-		isFemale = patts.atts[ATT_GENDER] > 0.5;
-		prob =
-			isFemale ? (int)(patts.atts[ATT_GENDER] * 100 + 0.5f) : (int)((1.0f - patts.atts[ATT_GENDER]) * 100 + 0.5f);
-	}
+    static void getGenderAtt(PedAtts &patts, bool &isFemale, int &prob) {
+        isFemale = patts.atts[ATT_GENDER] > 0.5;
+        prob =
+            isFemale ? (int)(patts.atts[ATT_GENDER] * 100 + 0.5f) : (int)((1.0f - patts.atts[ATT_GENDER]) * 100 + 0.5f);
+    }
 
-	static int getAgeGroupAtt(PedAtts& patts) {
-		int ageGroup;
+    static int getAgeGroupAtt(PedAtts &patts) {
+        int ageGroup;
 
-		if (patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ADULT] &&
-            patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ELDER]) {
-			ageGroup = CHILD_GROUP;
-		}
-		else {
-            if (patts.atts[ATT_AGE_ADULT] > patts.atts[ATT_AGE_ELDER]) {
-				ageGroup = ADULT_GROUP;
-			}
-			else {
-				ageGroup = ELDER_GROUP;
-			}
-		}
-
-		return ageGroup;
-	}
-
-	static void getAgeGroupAtt(PedAtts& patts, int& ageGroup, int& prob) {
         if (patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ADULT] &&
             patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ELDER]) {
-			ageGroup = CHILD_GROUP;
-            prob = patts.atts[ATT_AGE_CHILD] * 100 + 0.5f;
-		}
-		else {
+            ageGroup = CHILD_GROUP;
+        } else {
             if (patts.atts[ATT_AGE_ADULT] > patts.atts[ATT_AGE_ELDER]) {
-				ageGroup = ADULT_GROUP;
-                prob = patts.atts[ATT_AGE_ADULT] * 100 + 0.5f;
-			}
-			else {
-				ageGroup = ELDER_GROUP;
-                prob = patts.atts[ATT_AGE_ELDER] * 100 + 0.5f;
-			}
-		}
-	}
-};
+                ageGroup = ADULT_GROUP;
+            } else {
+                ageGroup = ELDER_GROUP;
+            }
+        }
 
+        return ageGroup;
+    }
+
+    static void getAgeGroupAtt(PedAtts &patts, int &ageGroup, int &prob) {
+        if (patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ADULT] &&
+            patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ELDER]) {
+            ageGroup = CHILD_GROUP;
+            prob = patts.atts[ATT_AGE_CHILD] * 100 + 0.5f;
+        } else {
+            if (patts.atts[ATT_AGE_ADULT] > patts.atts[ATT_AGE_ELDER]) {
+                ageGroup = ADULT_GROUP;
+                prob = patts.atts[ATT_AGE_ADULT] * 100 + 0.5f;
+            } else {
+                ageGroup = ELDER_GROUP;
+                prob = patts.atts[ATT_AGE_ELDER] * 100 + 0.5f;
+            }
+        }
+    }
+};
 
 /// Pose Information
 const std::vector<std::pair<int, int>> cocoSkeletons = {
@@ -197,78 +248,99 @@ struct DetBox {
 
     int rxP, ryP;       /// for internal usage: reference position in the previous frame for counting
     uint lastFrameCnt;  /// for internal usage: frameCnt of the last counting
-    
-    float distVar;      /// box center variation after temporal pooling
-    uchar justCountedLine;    /// for emphasizing the object just counted (15:lastest - 0:no action)
+
+    float distVar;          /// box center variation after temporal pooling
+    uchar justCountedLine;  /// for emphasizing the object just counted (15:lastest - 0:no action)
     uchar justCountedZone;  /// for emphasizing the object just counted (15:lastest - 0:no action)
 
     PedAtts patts;  /// PAR info
 
-    Skeleton skel;      /// skel info
-    
+    Skeleton skel;  /// skel info
+
     int actID;      /// action ID in actIDMapping
     float actConf;  /// confidence of the current act
     int actSetCnt;  /// time elapsed since the last act info was detected
 };
 
 struct FireBox {
-    int x, y, w, h;   /// (x, y): top-left corner, (w, h): width & height of bounded box
-    int objID;        /// class of object - from range [0, classes-1]
-    int vchID;        /// video channel id
-    uint frameCnt;    /// frame cnt
-    float prob;       /// confidence - probability that the object was found correctly    
+    int x, y, w, h;  /// (x, y): top-left corner, (w, h): width & height of bounded box
+    int objID;       /// class of object - from range [0, classes-1]
+    int vchID;       /// video channel id
+    uint frameCnt;   /// frame cnt
+    float prob;      /// confidence - probability that the object was found correctly
 };
 
 struct Config {
     std::string key;                       /// authorization Key
-    uint frameLimit;               /// number of frames to be processed
+    uint frameLimit;                       /// number of frames to be processed
     std::vector<std::string> inputFiles;   /// list of the input files
     std::vector<std::string> outputFiles;  /// list of the output files
+    bool recording;                        /// record output videos
+    bool debugMode;                        /// output debug info and frames
+    bool logEnable;
+
+    // config
+    int maxBufferSize;              /// maximun input buffer size
+    int numChannels;                /// number of video channels (unlimited)
+    std::vector<int> vchStates;     /// vch states (0: non-connected, 1: connected)
+    std::vector<int> frameWidths;   /// widths of the input frames
+    std::vector<int> frameHeights;  /// heights of the input frames
+    std::vector<float> fpss;        /// fpss of the input frames
 
     // od config
-    bool odEnable;              /// Enable object detection and tracking
-    std::string odModelFile;    /// path to the od config file (ex:aipro_b5.trt)    
-    int netWidth;               /// width of the od model input
-    int netHeight;              /// height of the od model input
-    float odScoreTh;          /// threshold for filtering low confident detections    
-    int odBatchSize;            /// batch size of the od model
+    bool odEnable;            /// Enable object detection and tracking
+    std::string odModelFile;  /// path to the od config file (ex:aipro_b5.trt)
+    int odNetWidth;           /// width of the od model input
+    int odNetHeight;          /// height of the od model input
+    std::vector<float> odScaleFactors;
+    std::vector<float> odScaleFactorsInv;
+    float odScoreTh;  /// threshold for filtering low confident detections
+    int odBatchSize;  /// batch size of the od model
     std::vector<std::string> odIDMapping;
-    int numClasses;  /// number of classes
-    std::vector<bool> isMainChannel; // flags for indicating main channels
+    int numClasses;                /// number of classes
+    std::vector<bool> odChannels;  /// flags for indicating object detection channels
+    std::vector<bool> fdChannels;  /// flags for indicating fire detection channels
+    std::vector<bool> ccChannels;  /// flags for indicating crowd counting channels
 
     // fd config
     bool fdEnable;            /// Enable fire detection and tracking
     std::string fdModelFile;  /// path to the od config file (ex:aipro_b5.trt)
-    int fdNetWidth;             /// width of the fd model input
-    int fdNetHeight;            /// height of the fd model input
-    float fdScoreTh;          /// threshold for filtering low confident detections
-    int fdBatchSize;            /// batch size of the fd model
-    int fdWindowSize;           /// window size for fire and smoke detection history
+    int fdNetWidth;           /// width of the fd model input
+    int fdNetHeight;          /// height of the fd model input
+    std::vector<float> fdScaleFactors;
+    std::vector<float> fdScaleFactorsInv;
+    float fdScoreTh;   /// threshold for filtering low confident detections
+    int fdBatchSize;   /// batch size of the fd model
+    int fdWindowSize;  /// window size for fire and smoke detection history
     std::vector<std::string> fdIDMapping;
-    int fdNumClasses;           /// number of classes
-    int fdPeriod;               /// fire detection period
+    int fdNumClasses;  /// number of classes
+    int fdPeriod;      /// fire detection period
 
     // tracking
     int longLastingObjTh;  /// threshold for checking long-lasting objects in second
-    float noMoveTh; /// threshold for checking no movement objects
+    float noMoveTh;        /// threshold for checking no movement objects
 
     // counting
-    int debouncingTh;  /// debounce counting results over successive frames (suppress duplicated counting)
-    int lineEmphasizePeroid; /// line emphasize peroid
+    int debouncingTh;         /// debounce counting results over successive frames (suppress duplicated counting)
+    int lineEmphasizePeroid;  /// line emphasize peroid
 
     // par config
     bool parEnable;            /// enable par
-    bool parLightMode;          /// enable the light mode 
+    bool parLightMode;         /// enable the light mode
     std::string parModelFile;  /// par model file (ex:res50_256_128_a1_b32.onnx)
     std::vector<std::string> parIDMapping;
     int numAtts;          /// number of attributes (should be matched to par model)
     int attUpdatePeriod;  /// attribute update period
     int parBatchSize;     /// batch size of the PAR onnx model
 
-    int numChannels;                /// number of video channels (unlimited)
-    std::vector<int> frameWidths;   /// widths of the input frames
-    std::vector<int> frameHeights;  /// heights of the input frames
-    std::vector<float> fpss;        /// fpss of the input frames
+    // crowd counting
+    bool ccEnable;    /// enable crowd counting
+    int ccNetWidth;   /// width of the crowd counting model input
+    int ccNetHeight;  /// height of the crowd counting model input
+    std::vector<float> ccScaleFactors;
+    std::vector<float> ccScaleFactorsInv;
+    std::string ccModelFile;  /// crowd counting model file
+    int ccWindowSize;
 
     // pose config
     bool poseEnable;            /// Enable pose
@@ -280,15 +352,15 @@ struct Config {
     bool actEnable;            /// enable action recognition
     std::string actModelFile;  /// act model file (ex: aipro_act_t17_b2.onnx)
     std::vector<std::string> actIDMapping;
-    float actScoreTh;     /// threshold for filtering low confident actions
-    float heatmapScoreTh; /// threshold for filtering low confident keypoint in heatmap generation
-    int actBatchSize;     /// batch size of the act onnx model
-    int actUpdatePeriod;  /// action info updata period(= act model inference period)
-    int actLastPeriod;    /// time period to keep the action info (used in tracking)
-    bool multiPersons;    /// generate clip using multiple persons
-    int clipLength;       /// length of the clip
-    int missingLimit;     /// frame-missing-tolerance limit
-    int maxNumClips;      /// maximum number of clips to be stored at a time    
+    float actScoreTh;      /// threshold for filtering low confident actions
+    float heatmapScoreTh;  /// threshold for filtering low confident keypoint in heatmap generation
+    int actBatchSize;      /// batch size of the act onnx model
+    int actUpdatePeriod;   /// action info updata period(= act model inference period)
+    int actLastPeriod;     /// time period to keep the action info (used in tracking)
+    bool multiPersons;     /// generate clip using multiple persons
+    int clipLength;        /// length of the clip
+    int missingLimit;      /// frame-missing-tolerance limit
+    int maxNumClips;       /// maximum number of clips to be stored at a time
 };
 
 // reading/writing -> motionless

@@ -11,13 +11,13 @@
 /* #undef CV_DISABLE_OPTIMIZATION */
 
 /* Compile for 'real' NVIDIA GPU architectures */
-#define CUDA_ARCH_BIN ""
+#define CUDA_ARCH_BIN " 80 86 89 90"
 
 /* NVIDIA GPU features are used */
-#define CUDA_ARCH_FEATURES ""
+#define CUDA_ARCH_FEATURES " 80 86 89 90 90"
 
 /* Compile for 'virtual' NVIDIA PTX architectures */
-#define CUDA_ARCH_PTX ""
+#define CUDA_ARCH_PTX " 90"
 
 /* AMD's Basic Linear Algebra Subprograms Library*/
 /* #undef HAVE_CLAMDBLAS */
@@ -29,23 +29,23 @@
 /* #undef HAVE_CLP */
 
 /* NVIDIA CUDA Runtime API*/
-/* #undef HAVE_CUDA */
+#define HAVE_CUDA
 
 /* NVIDIA CUDA Basic Linear Algebra Subprograms (BLAS) API*/
-/* #undef HAVE_CUBLAS */
+#define HAVE_CUBLAS
 
 /* NVIDIA CUDA Deep Neural Network (cuDNN) API*/
-/* #undef HAVE_CUDNN */
+#define HAVE_CUDNN
 
 /* NVIDIA CUDA Fast Fourier Transform (FFT) API*/
-/* #undef HAVE_CUFFT */
+#define HAVE_CUFFT
 
 /* DirectX */
-#define HAVE_DIRECTX
-#define HAVE_DIRECTX_NV12
+/* #undef HAVE_DIRECTX */
+/* #undef HAVE_DIRECTX_NV12 */
 #define HAVE_D3D11
-#define HAVE_D3D10
-#define HAVE_D3D9
+/* #undef HAVE_D3D10 */
+/* #undef HAVE_D3D9 */
 
 /* Eigen Matrix & Linear Algebra Library */
 /* #undef HAVE_EIGEN */
@@ -63,48 +63,51 @@
 #define HAVE_INTTYPES_H 1
 
 /* Intel Integrated Performance Primitives */
-#define HAVE_IPP
-#define HAVE_IPP_ICV
-#define HAVE_IPP_IW
-#define HAVE_IPP_IW_LL
+/* #undef HAVE_IPP */
+/* #undef HAVE_IPP_ICV */
+/* #undef HAVE_IPP_IW */
+/* #undef HAVE_IPP_IW_LL */
 
 /* JPEG-2000 codec */
 #define HAVE_OPENJPEG
 /* #undef HAVE_JASPER */
 
+/* AVIF codec */
+/* #undef HAVE_AVIF */
+
 /* IJG JPEG codec */
 #define HAVE_JPEG
-
-/* libpng/png.h needs to be included */
-/* #undef HAVE_LIBPNG_PNG_H */
 
 /* GDCM DICOM codec */
 /* #undef HAVE_GDCM */
 
 /* NVIDIA Video Decoding API*/
-/* #undef HAVE_NVCUVID */
-/* #undef HAVE_NVCUVID_HEADER */
+#define HAVE_NVCUVID
+#define HAVE_NVCUVID_HEADER
 /* #undef HAVE_DYNLINK_NVCUVID_HEADER */
 
 /* NVIDIA Video Encoding API*/
-/* #undef HAVE_NVCUVENC */
+#define HAVE_NVCUVENC
 
 /* OpenCL Support */
-#define HAVE_OPENCL
+/* #undef HAVE_OPENCL */
 /* #undef HAVE_OPENCL_STATIC */
 /* #undef HAVE_OPENCL_SVM */
 
 /* NVIDIA OpenCL D3D Extensions support */
-#define HAVE_OPENCL_D3D11_NV
+/* #undef HAVE_OPENCL_D3D11_NV */
 
 /* OpenEXR codec */
-#define HAVE_OPENEXR
+/* #undef HAVE_OPENEXR */
 
 /* OpenGL support*/
 /* #undef HAVE_OPENGL */
 
 /* PNG codec */
 #define HAVE_PNG
+
+/* PNG codec */
+/* #undef HAVE_SPNG */
 
 /* Posix threads (pthreads) */
 /* #undef HAVE_PTHREAD */
@@ -144,6 +147,6 @@
 #define OPENCV_TRACE
 
 /* Library QR-code decoding */
-#define HAVE_QUIRC
+/* #undef HAVE_QUIRC */
 
 #endif // OPENCV_CVCONFIG_H_INCLUDED
