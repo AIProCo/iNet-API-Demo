@@ -5,32 +5,29 @@
      - Object Detection 
      - Object Tracking
      - Pedestrian Attribute Recognition
-     - Pose Estimation
-     - Action Recognition
      - Pedestrian Counting & Zone Hitmap Estimation
      - Fire Detection
+     - Crowd Counting
 
-- In this demo, the number of inferences is limited to 1000.
 - Commercial use must be approved by AIPro Inc.
   
 ------------------
 
 ### **Dependency**
 
-- Cuda 11.6.2
-- cuDNN 8.4.0 (cudnn-windows-x86_64-8.4.0.27_cuda11.6)
-- zlibwapi.dll (cuDNN 8.4.0 uses this)
+- cuda 12.1.0 (cuda_12.1.0_531.14_windows.exe)
+- cuDNN 8.9.6 (cudnn-windows-x86_64-8.9.6.50_cuda12-archive.zip)
+- openvino
 
 ### **Installation and Solution Guide**
 
 - You can refer to one of the following technical documents in the repository for installation and guide:
-  + English: AIPro_iNet_solution_guide_v1(English).pdf
-  + Korean: AIPro_iNet_solution_guide_v1(Korean).pdf
+  + Korean: AIPro_iNet_solution_guide_v1_4(Korean).pdf
 
 ### **Download and extract files**
 - Download and upzip the followings zip files. Then, copy and paste bin, inputs, and videos directories to the solution directory (the directory including the `.sln` file):
   + Cuda compute capability of your GPU should be 8.6 or later(ex: RTX 30xx): 
-    - https://drive.google.com/file/d/1pnwi1is57lXCYIX0TPlZ8-BJLfzWBsds/view?usp=share_link
+    - hidden
 
 ### **Run the project**
 
