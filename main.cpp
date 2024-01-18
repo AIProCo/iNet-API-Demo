@@ -31,12 +31,12 @@
 #define DRAW_FIRE_DETECTION_COUNTING true
 #define DRAW_POSE false
 #define DRAW_ACTION false
-#define DRAW_CNTLINE false
-#define DRAW_CNTLINE_COUNTING false
-#define DRAW_ZONE false
-#define DRAW_ZONE_COUNTING false
-#define DRAW_CC false
-#define DRAW_CC_COUNTING false
+#define DRAW_CNTLINE true
+#define DRAW_CNTLINE_COUNTING true
+#define DRAW_ZONE true
+#define DRAW_ZONE_COUNTING true
+#define DRAW_CC true
+#define DRAW_CC_COUNTING true
 
 #define CFG_FILEPATH "inputs/config.json"
 #define CC_MD_FILEPATH "inputs/aipro_cc_1_4.net"
@@ -185,9 +185,9 @@ int main() {
             float inf0 = (end - start) / odBatchSize;
 
             // printRecord(odRcd, frameCnt);  // print the record
-            // if (frameCnt % 20 == 0)
-            cout << std::format("[{}]Frame{:>4}>  SP: ({:>2}, {:>3}),  Buf: {},  Inf: {}ms\n", vchID, frameCnt,
-                                sleepPeriodMain, streamer.sleepPeriod, streamer.unsafe_size(), inf0);
+            if (frameCnt % 20 == 0)
+                cout << std::format("[{}]Frame{:>4}>  SP: ({:>2}, {:>3}),  Buf: {},  Inf: {}ms\n", vchID, frameCnt,
+                                    sleepPeriodMain, streamer.sleepPeriod, streamer.unsafe_size(), inf0);
 
             if (frameCnt > 10 && frameCnt < 500) {  // skip the start frames and limit the number of elements
                 infs0.push_back(inf0);
@@ -628,7 +628,7 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
     string filenameCam = "cam.json";
     string jsonPathCam = string(CONFIG_PATH) + "/" + filenameCam;
 
-    if (parsingMode == 1 && std::filesystem::exists(jsonPathCam)) {
+    if ((parsingMode == 1 || parsingMode == 3) && std::filesystem::exists(jsonPathCam)) {
         std::ifstream fileCam(jsonPathCam);
         json jsCam;
         fileCam >> jsCam;
@@ -664,7 +664,7 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
         cfg.ccChannels = js["global"]["cc_channels"].get<vector<bool>>();
     }
 
-    cfg.maxBufferSize = 100;
+    cfg.maxBufferSize = 60;
     cfg.vchStates.resize(cfg.numChannels, 0);
     cfg.frameWidths.resize(cfg.numChannels, 0);
     cfg.frameHeights.resize(cfg.numChannels, 0);
@@ -777,7 +777,7 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
     string filenameInit = "init.txt";
     string txtPathInit = string(CONFIG_PATH) + "/" + filenameInit;
 
-    if (parsingMode == 1 && std::filesystem::exists(txtPathInit)) {
+    if ((parsingMode == 2 || parsingMode == 3) && std::filesystem::exists(txtPathInit)) {
         loadInit(txtPathInit, cntLineParams, zoneParams, ccZoneParams);
     } else {
         // cntline
