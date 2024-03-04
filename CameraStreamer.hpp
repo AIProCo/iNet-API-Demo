@@ -15,6 +15,10 @@ using namespace cv;
 class CameraStreamer {
    public:
     Config *pCfg;
+    ODRecord *pOdRcd;
+    FDRecord *pFdRcd;
+    CCRecord *pCcRcd;
+
     int numChannels;
     int maxBufferSize;
     vector<unsigned int> frameCnts;  // fpss are casted from double to int
@@ -29,8 +33,10 @@ class CameraStreamer {
     CMats cmats;
     vector<VideoWriter> videoWriters;
 
+    std::function<void(std::string)> lg;  // for writing log
+
     std::vector<std::thread *> cameraThreads;  // thread that run camera capture process
-    CameraStreamer(Config &cfg);
+    CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
     void destory();  // explicit destory function. (cuz destructor is called randomly)
 
    private:

@@ -79,10 +79,9 @@ GENERATOR_API bool runModelFD(std::vector<std::vector<FireBox>> &fboxesMul, std:
  * @param density return the density of people
  * @param frame input frame
  * @param vchID vchID of the input frame
- * @param ccScoreTh threshold for filtering low confident detections
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModelCC(cv::Mat &density, cv::Mat &frame, int vchID, float ccScoreTh);
+GENERATOR_API bool runModelCC(cv::Mat &density, cv::Mat &frame, int vchID);
 
 /** @brief Destroy all models
  *

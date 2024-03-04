@@ -3,8 +3,14 @@
 #include "CameraStreamer.hpp"
 #include "opencv2/opencv.hpp"
 
-CameraStreamer::CameraStreamer(Config &cfg) {
+CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
     pCfg = &cfg;
+    pOdRcd = &odRcd;
+    pFdRcd = &fdRcd;
+    pCcRcd = &ccRcd;
+
+    lg = cfg.lg;
+
     numChannels = cfg.numChannels;
     maxBufferSize = cfg.maxBufferSize;
 
@@ -14,7 +20,7 @@ CameraStreamer::CameraStreamer(Config &cfg) {
     outputs = cfg.outputFiles;
 
     stopFlag = false;
-    initSleepPeriod = 150;  // 150;
+    initSleepPeriod = 180;  // 150;
     sleepPeriod = initSleepPeriod;
 
     videoWriters.resize(numChannels);
@@ -64,7 +70,7 @@ void CameraStreamer::keepConnected(int vchID) {
         // std::cout << "bname = " << bname << std::endl;
 
         time_t time_1 = time(0) - time_begin;
-        std::cout << "[" << vchID << "] Delay: " << time_1 << " -> ";
+        // std::cout << "[" << vchID << "] Delay: " << time_1 << " -> ";
 
         if (capture.isOpened()) {
             pCfg->vchStates[vchID] = 1;  // set connected
@@ -72,7 +78,9 @@ void CameraStreamer::keepConnected(int vchID) {
             // Quit before conntect
             if (stopFlag)
                 return;
-            std::cout << "[" << vchID << "] Opened: " << input << std::endl;
+
+            lg(std::format("[{}] Open: {}\n", vchID, input));
+            // std::cout << "[" << vchID << "] Opened: " << input << std::endl;
 
             if (firstOpen) {
                 firstOpen = false;
@@ -85,6 +93,60 @@ void CameraStreamer::keepConnected(int vchID) {
                 pCfg->frameWidths[vchID] = frameWidth;
                 pCfg->fpss[vchID] = fps;
 
+                if (frameHeight < 0 || frameHeight > 2160 || frameWidth < 0 || frameWidth > 3840) {
+                    lg(std::format("Unsupported bitstream: {} {}", frameHeight, frameWidth));
+                    exit(-1);
+                }
+
+                for (CntLine &c : pOdRcd->cntLines) {
+                    if (vchID == c.vchID) {
+                        if (c.pts[0].x < 0 || c.pts[0].x >= frameWidth || c.pts[1].x < 0 || c.pts[1].x >= frameWidth) {
+                            lg(std::format("cntLine pt.x error in keepConnected: {} {} {}", c.pts[0].x, c.pts[1].x,
+                                           frameWidth));
+                            exit(-1);
+                        }
+                        if (c.pts[0].y < 0 || c.pts[0].y >= frameHeight || c.pts[1].y < 0 ||
+                            c.pts[1].y >= frameHeight) {
+                            lg(std::format("cntLine pt.y error in keepConnected: {} {} {}", c.pts[0].y, c.pts[1].y,
+                                           frameHeight));
+                            exit(-1);
+                        }
+                    }
+                }
+
+                for (Zone &z : pOdRcd->zones) {
+                    if (vchID == z.vchID) {
+                        for (Point &pt : z.pts) {
+                            if (pt.x < 0 || pt.x >= frameWidth) {
+                                lg(std::format("zone pt.x error in keepConnected: {} {}", pt.x, frameWidth));
+                                exit(-1);
+                            }
+
+                            if (pt.y < 0 || pt.y >= frameHeight) {
+                                lg(std::format("zone pt.y error in keepConnected: {} {}", pt.y, frameHeight));
+                                exit(-1);
+                            }
+                        }
+                    }
+                }
+
+#ifndef _CPU_INFER
+                for (CCZone &z : pCcRcd->ccZones) {
+                    if (vchID == z.vchID) {
+                        for (Point &pt : z.pts) {
+                            if (pt.x < 0 || pt.x >= frameWidth) {
+                                lg(std::format("ccZone pt.x error in keepConnected: {} {}", pt.x, frameWidth));
+                                exit(-1);
+                            }
+
+                            if (pt.y < 0 || pt.y >= frameHeight) {
+                                lg(std::format("ccZone pt.y error in keepConnected: {} {}", pt.y, frameHeight));
+                                exit(-1);
+                            }
+                        }
+                    }
+                }
+#endif
                 pCfg->odScaleFactors[vchID] =
                     std::min((float)pCfg->odNetWidth / frameWidth, (float)pCfg->odNetHeight / frameHeight);
                 pCfg->odScaleFactorsInv[vchID] = 1.0f / pCfg->odScaleFactors[vchID];
@@ -101,7 +163,8 @@ void CameraStreamer::keepConnected(int vchID) {
                     videoWriters[vchID].open(outputs[vchID], VideoWriter::fourcc('m', 'p', '4', 'v'), fps,
                                              Size(frameWidth, frameHeight));  ///*.mp4 format
 
-                cout << std::format("vch {}: ({}, {}), {}\n", vchID, frameWidth, frameHeight, fps);
+                lg(std::format("vch {}: ({}, {}), {}\n", vchID, frameWidth, frameHeight, fps));
+                // cout << std::format("vch {}: ({}, {}), {}\n", vchID, frameWidth, frameHeight, fps);
             }
 
             bool response = working(&capture, vchID);
@@ -111,11 +174,11 @@ void CameraStreamer::keepConnected(int vchID) {
                 if (stopFlag)
                     return;
 
-                // Wait for 5 sec and try to reconnect (keep connected with real-time ip camera)
+                // Wait for 2 sec and try to reconnect (keep connected with real-time ip camera)
                 Sleep(2000);
             }
         } else {
-            std::cout << "[" << vchID << "] Not opened" << std::endl;
+            // std::cout << "[" << vchID << "] Not opened" << std::endl;
             Sleep(2000);
         }
     }
@@ -162,7 +225,7 @@ bool CameraStreamer::working(cv::VideoCapture *capture, int vchID) {
     while (true) {
         if (!capture->grab()) {
             grapFailCnt++;
-            std::cout << "Grab Fail: " << vchID << ", Fail Count: " << grapFailCnt << std::endl;
+            lg(std::format(" [{}]Grab Fail - Fail Count: {}\n", vchID, grapFailCnt));
 
             if (grapFailCnt > 2)
                 return false;
@@ -171,9 +234,9 @@ bool CameraStreamer::working(cv::VideoCapture *capture, int vchID) {
             capture->retrieve(frame);
             if (frame.empty()) {
                 retrieveEmptyCnt++;
-                std::cout << "Retrieve Fail: " << vchID << ", Fail Count: " << retrieveEmptyCnt << std::endl;
+                lg(std::format(" [{}]Retrieve Fail - Fail Count: {}\n", vchID, retrieveEmptyCnt));
 
-                if (grapFailCnt > 2)
+                if (retrieveEmptyCnt > 2)
                     return false;
             } else {
                 int curBufferSize = cmats.unsafe_size();

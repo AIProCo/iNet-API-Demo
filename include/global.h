@@ -88,6 +88,8 @@
 #define CNT_PATH "c:/aipro/data/cnt"
 #define CC_PATH "c:/aipro/data/cc"
 #define FD_PATH "c:/aipro/data/fd"
+#define LOG_PATH "c:/aipro/data/log"
+#define VIDEO_OUT_PATH "c:/aipro/inet/videos"
 
 /// s2e commands
 #define CMD_INSERT_LINE 0
@@ -96,32 +98,44 @@
 #define CMD_REMOVE_ZONE 3
 #define CMD_INSERT_CCZONE 4
 #define CMD_REMOVE_CCZONE 5
+#define CMD_UPDATE_SCORETHS 50
 #define CMD_CLEARLOG 100
 #define CMD_REMOVE_ALL_LINES_ZONES 101
 #define CMD_REMOVE_ALL_LINES 102
 #define CMD_REMOVE_ALL_ZONES 103
 #define CMD_REMOVE_ALL_CCZONES 104
+#define CMD_TERMINATE_PROGRAM 200
+
+/// IS_MODE
+#define IS_PEOPLE_COUNTING 0
+#define IS_RESTRICTED_AREA 1
 
 typedef unsigned char uchar;
 typedef unsigned int uint;
 
 struct Zone {
-    bool enabled;                /// enable flag
-    int zoneID;                  /// Unique zone id
-    int vchID;                   /// vchID where the zone exists
-    std::vector<cv::Point> pts;  /// corner points (should be larger than 2)
+    bool enabled;  /// enable flag
+    int zoneID;    /// Unique zone id
+    int vchID;     /// vchID where the zone exists
 
+    int isMode;    /// IS mode(0: people counting, 1: restricted area)
+    int preTotal;  /// for internal usage in logger
+
+    std::vector<cv::Point> pts;                  /// corner points (should be larger than 2)
     int curPeople[NUM_GENDERS][NUM_AGE_GROUPS];  /// current people in the zone
     int hitMap[NUM_GENDERS][NUM_AGE_GROUPS];     /// total people in the zone
 };
 
 struct CntLine {
-    bool enabled;      /// enable flag
-    int clineID;       /// unique counting line id
-    int vchID;         /// vchID where the counting line exits
-    int direction;     /// counting line direction (0:horizonal, 1:vertical)
-    cv::Point pts[2];  /// 2 end-points
+    bool enabled;   /// enable flag
+    int clineID;    /// unique counting line id
+    int vchID;      /// vchID where the counting line exits
+    int direction;  /// counting line direction (0:horizonal, 1:vertical)
 
+    int isMode;    /// IS mode(0: people counting, 1: restricted area)
+    int preTotal;  /// for internal usage in logger
+
+    cv::Point pts[2];                          /// 2 end-points
     int totalUL[NUM_GENDERS][NUM_AGE_GROUPS];  // number of total object that move up or left
     int totalDR[NUM_GENDERS][NUM_AGE_GROUPS];  // number of total object that move down or right
 };
@@ -133,6 +147,7 @@ struct CCZone {
     std::vector<cv::Point> pts;         /// corner points (should be larger than 2)
     int ccLevelThs[NUM_CC_LEVELS - 1];  /// ccLevel1, ccLevel2, ccLevel3
     int ccLevel;                        /// current ccLevel
+    int preCCLevel;                     /// previous ccLevel
     cv::Mat mask;                       /// mask
 
     int maxCC;                              /// for internal usage in logger
@@ -151,11 +166,12 @@ struct ODRecord {
 struct FDRecord {
     std::vector<std::deque<float>> fireProbsMul;   // fire probability
     std::vector<std::deque<float>> smokeProbsMul;  // smoke probability
+    std::vector<int> afterFireEvents;              /// for internal usage in logger
 };
 
 struct CCRecord {
-    std::vector<std::deque<int>> ccNumFrames;
-    std::vector<CCZone> ccZones;  // czones
+    std::vector<std::deque<int>> ccNumFrames;  // people in the whole frame
+    std::vector<CCZone> ccZones;               // ccZones
 };
 
 /// data structure for pedestrian attributes (gender, age, has backpack, etc)
@@ -270,6 +286,8 @@ struct FireBox {
     float prob;      /// confidence - probability that the object was found correctly
 };
 
+class Logger;
+
 struct Config {
     std::string key;                       /// authorization Key
     uint frameLimit;                       /// number of frames to be processed
@@ -361,6 +379,8 @@ struct Config {
     int clipLength;        /// length of the clip
     int missingLimit;      /// frame-missing-tolerance limit
     int maxNumClips;       /// maximum number of clips to be stored at a time
+
+    std::function<void(std::string)> lg;
 };
 
 // reading/writing -> motionless

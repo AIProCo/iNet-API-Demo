@@ -112,6 +112,21 @@ class Vis {
         Size txtSize = getBoxForTexts(texts, fontFace, fontScale, thickness, vSpace, hSpace);
         Point rightBottom = Point(topLeftBox.x + txtSize.width, topLeftBox.y + txtSize.height);
 
+        if (txtSize.width >= matImg.cols || txtSize.height >= matImg.rows)
+            return;
+
+        if (rightBottom.x > matImg.cols) {
+            int shiftX = rightBottom.x - matImg.cols;
+            topLeftBox.x -= shiftX;
+            rightBottom.x -= shiftX;
+        }
+
+        if (rightBottom.y > matImg.rows) {
+            int shiftY = rightBottom.y - matImg.rows;
+            topLeftBox.y -= shiftY;
+            rightBottom.y -= shiftY;
+        }
+
         /// draw canvas
         Mat textRegion = matImg(Rect(topLeftBox, rightBottom));
         textRegion -= Scalar(100, 100, 100);
