@@ -243,11 +243,11 @@ int main() {
             if (cfg.recording)
                 (streamer[vchID]) << frame;  // write a frame
 
-            logger.writeData(cfg, odRcd, fdRcd, ccRcd, frame, frameCnt, fboxes, vchID, now);
+            logger.writeData(cfg, odRcd, fdRcd, ccRcd, frame, frameCnt, fboxesChPre[vchID], vchID, now);
 
             float inf0 = (end - start) / odBatchSize;
 
-            if (frameCnt % 1 == 0)
+            if (frameCnt % 50 == 0)
                 lg(std::format("[{}]Frame{:>4}>  SP({:>2}, {:>3}), Gap(FD: {}, CC: {}),  Buf: {},  Inf: {}ms\n", vchID,
                                frameCnt, sleepPeriodMain, streamer.sleepPeriod, periodFD, periodCC,
                                streamer.unsafe_size(), inf0));

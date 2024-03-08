@@ -20,7 +20,7 @@ CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CC
     outputs = cfg.outputFiles;
 
     stopFlag = false;
-    initSleepPeriod = 180;  // 150;
+    initSleepPeriod = 120;  // 180;//150;
     sleepPeriod = initSleepPeriod;
 
     videoWriters.resize(numChannels);
@@ -178,8 +178,8 @@ void CameraStreamer::keepConnected(int vchID) {
                 Sleep(2000);
             }
         } else {
-            // std::cout << "[" << vchID << "] Not opened" << std::endl;
-            Sleep(2000);
+            std::cout << "[" << vchID << "] Can't connect: " << input << std::endl;
+            Sleep(5000);
         }
     }
 };

@@ -212,6 +212,21 @@ class Logger {
         return true;
     }
 
+    void monitor1x1(Mat &frame, int vchID, tm *curTm, int msec) {
+        if (vchUpdated[vchID])
+            return;
+
+        Mat &canvase = canvases[0];  // use only the canvase one
+        Mat resized;
+
+        resize(frame, canvase, Size(1920, 1080));
+        // rectangle(canvase, Rect(0, 0, 42, 28), Scalar(255, 255, 255), -1);
+        // putText(canvase, to_string(vchID + 1), Point(0, 24), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 0));
+
+        vchUpdated[vchID] = true;
+        pageUpdated[0] = true;
+    }
+
     void monitor2x2(Mat &frame, int vchID, tm *curTm, int msec) {
         if (vchUpdated[vchID])
             return;
@@ -869,8 +884,10 @@ class Logger {
 
         if (numChannels > 4)
             monitor3x3(frame, vchID, curTm, msec);
-        else
+        else if (numChannels > 1)
             monitor2x2(frame, vchID, curTm, msec);
+        else
+            monitor1x1(frame, vchID, curTm, msec);
 
         // generate a 30 min log and a one day log
         // if ((preTm.tm_min == 29 && curTm->tm_min == 30) || (preTm.tm_min != -1 && preTm.tm_min != curTm->tm_min)){
@@ -1273,7 +1290,7 @@ class Logger {
 
         for (int p = 0; p < 2; p++) {
             if (pageUpdated[p]) {
-                int msec5 = msec / 200;  // save at 5 fps
+                int msec5 = msec / 125;  // save at 5 fps
 
                 if (preTimes[p] != msec5) {
                     preTimes[p] = msec5;
