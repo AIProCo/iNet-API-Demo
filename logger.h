@@ -530,15 +530,60 @@ class Logger {
                                 cntLine.totalUL[g][a] = cntLine.totalDR[g][a] = 0;
 
                         bool duplicated = false;
-                        for (auto &item : odRcd.cntLines)
+                        for (auto &item : odRcd.cntLines) {
                             if (item.vchID == cntLine.vchID && item.clineID == cntLine.clineID) {
                                 duplicated = true;
                                 break;
                             }
+                        }
 
                         if (!duplicated) {
                             odRcd.cntLines.push_back(cntLine);
                             preOdRcd.cntLines.push_back(cntLine);
+                        }
+                        break;
+                    }
+                    case CMD_MODIFY_LINE: {
+                        CntLine cntLine;
+
+                        cntLine.enabled = true;
+                        ss >> cntLine.clineID;
+                        ss >> cntLine.vchID;
+                        ss >> cntLine.isMode;
+                        ss >> cntLine.pts[0].x;
+                        ss >> cntLine.pts[0].y;
+                        ss >> cntLine.pts[1].x;
+                        ss >> cntLine.pts[1].y;
+
+                        int fH = cfg.frameHeights[cntLine.vchID];
+                        int fW = cfg.frameWidths[cntLine.vchID];
+
+                        if (cntLine.pts[0].x < 0 || cntLine.pts[0].x >= fW || cntLine.pts[1].x < 0 ||
+                            cntLine.pts[1].x >= fW) {
+                            writeLog(
+                                std::format("cntLine.pts.x error: {} {} {}", cntLine.pts[0].x, cntLine.pts[1].x, fW));
+                            return false;
+                        }
+
+                        if (cntLine.pts[0].y < 0 || cntLine.pts[0].y >= fH || cntLine.pts[1].y < 0 ||
+                            cntLine.pts[1].y >= fH) {
+                            writeLog(
+                                std::format("cntLine.pts.y error: {} {} {}", cntLine.pts[0].y, cntLine.pts[1].y, fH));
+                            return false;
+                        }
+
+                        if (abs(cntLine.pts[0].x - cntLine.pts[1].x) > abs(cntLine.pts[0].y - cntLine.pts[1].y))
+                            cntLine.direction = 0;  // horizontal line -> use delta y and count U and D
+                        else
+                            cntLine.direction = 1;  // vertical line -> use delta x and count L and R
+
+                        for (auto &item : odRcd.cntLines) {
+                            if (item.vchID == cntLine.vchID && item.clineID == cntLine.clineID) {
+                                item.pts[0] = cntLine.pts[0];
+                                item.pts[1] = cntLine.pts[1];
+                                item.direction = cntLine.direction;
+                                break;
+                            }
                         }
                         break;
                     }
@@ -616,6 +661,47 @@ class Logger {
                             preOdRcd.zones.push_back(zone);
                         }
 
+                        break;
+                    }
+                    case CMD_MODIFY_ZONE: {
+                        Zone zone;
+
+                        zone.enabled = true;
+                        ss >> zone.zoneID;
+                        ss >> zone.vchID;
+                        ss >> zone.isMode;
+
+                        if (zone.vchID >= cfg.numChannels) {
+                            writeLog(std::format("zone.vchID error: {} {}", zone.vchID, cfg.numChannels));
+                            return false;
+                        }
+
+                        int fH = cfg.frameHeights[zone.vchID];
+                        int fW = cfg.frameWidths[zone.vchID];
+
+                        for (int i = 0; i < 4; i++) {
+                            Point pt;
+                            ss >> pt.x;
+                            ss >> pt.y;
+                            zone.pts.push_back(pt);
+
+                            if (pt.x < 0 || pt.x >= fW) {
+                                writeLog(std::format("zone.pts.x error: {} {}", pt.x, fW));
+                                return false;
+                            }
+
+                            if (pt.y < 0 || pt.y >= fH) {
+                                writeLog(std::format("zone.pts.y error: {} {}", pt.y, fH));
+                                return false;
+                            }
+                        }
+
+                        for (auto &item : odRcd.zones) {
+                            if (item.vchID == zone.vchID && item.zoneID == zone.zoneID) {
+                                std::copy(zone.pts.begin(), zone.pts.end(), item.pts.begin());
+                                break;
+                            }
+                        }
                         break;
                     }
                     case CMD_REMOVE_ZONE: {
@@ -704,15 +790,76 @@ class Logger {
                         ccZone.mask = cv::Mat();
 
                         bool duplicated = false;
-                        for (auto &item : ccRcd.ccZones)
+                        for (auto &item : ccRcd.ccZones) {
                             if (item.vchID == ccZone.vchID && item.ccZoneID == ccZone.ccZoneID) {
                                 duplicated = true;
                                 break;
                             }
+                        }
 
                         if (!duplicated)
                             ccRcd.ccZones.push_back(ccZone);
 
+                        break;
+                    }
+                    case CMD_MODIFY_CCZONE: {
+                        CCZone ccZone;
+
+                        ccZone.enabled = true;
+                        ccZone.ccLevel = 0;
+#ifndef _CPU_INFER
+                        ss >> ccZone.ccZoneID;
+                        ss >> ccZone.vchID;
+
+                        if (ccZone.vchID >= cfg.numChannels) {
+                            writeLog(std::format("ccZone.vchID error: {} {}", ccZone.vchID, cfg.numChannels));
+                            return false;
+                        }
+
+                        int fH = cfg.frameHeights[ccZone.vchID];
+                        int fW = cfg.frameWidths[ccZone.vchID];
+
+                        for (int i = 0; i < 4; i++) {
+                            Point pt;
+                            ss >> pt.x;
+                            ss >> pt.y;
+                            ccZone.pts.push_back(pt);
+
+                            if (pt.x < 0 || pt.x >= fW) {
+                                writeLog(std::format("zone.pts.x error: {} {}", pt.x, fW));
+                                return false;
+                            }
+
+                            if (pt.y < 0 || pt.y >= fH) {
+                                writeLog(std::format("zone.pts.y error: {} {}", pt.y, fH));
+                                return false;
+                            }
+                        }
+#else
+                        ccZone.ccZoneID = -1;
+                        ss >> ccZone.vchID;
+
+                        if (ccZone.vchID >= cfg.numChannels) {
+                            writeLog(std::format("ccZone.vchID error: {} {}", ccZone.vchID, cfg.numChannels));
+                            return false;
+                        }
+#endif
+                        ss >> ccZone.ccLevelThs[0];
+                        ss >> ccZone.ccLevelThs[1];
+                        ss >> ccZone.ccLevelThs[2];
+
+                        for (auto &item : ccRcd.ccZones) {
+                            if (item.vchID == ccZone.vchID && item.ccZoneID == ccZone.ccZoneID) {
+#ifndef _CPU_INFER
+                                std::copy(ccZone.pts.begin(), ccZone.pts.end(), item.pts.begin());
+#endif
+                                item.ccLevelThs[0] = ccZone.ccLevelThs[0];
+                                item.ccLevelThs[1] = ccZone.ccLevelThs[1];
+                                item.ccLevelThs[2] = ccZone.ccLevelThs[2];
+
+                                break;
+                            }
+                        }
                         break;
                     }
                     case CMD_REMOVE_CCZONE: {

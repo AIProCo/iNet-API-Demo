@@ -1,5 +1,5 @@
 /*==============================================================================
-* Copyright 2022 AIPro Inc.
+* Copyright 2024 AIPro Inc.
 * Author: Chun-Su Park (cspk@skku.edu)
 =============================================================================*/
 #pragma once
@@ -93,11 +93,14 @@
 
 /// s2e commands
 #define CMD_INSERT_LINE 0
-#define CMD_REMOVE_LINE 1
-#define CMD_INSERT_ZONE 2
-#define CMD_REMOVE_ZONE 3
-#define CMD_INSERT_CCZONE 4
-#define CMD_REMOVE_CCZONE 5
+#define CMD_MODIFY_LINE 1
+#define CMD_REMOVE_LINE 2
+#define CMD_INSERT_ZONE 3
+#define CMD_MODIFY_ZONE 4
+#define CMD_REMOVE_ZONE 5
+#define CMD_INSERT_CCZONE 6
+#define CMD_MODIFY_CCZONE 7
+#define CMD_REMOVE_CCZONE 8
 #define CMD_UPDATE_SCORETHS 50
 #define CMD_CLEARLOG 100
 #define CMD_REMOVE_ALL_LINES_ZONES 101
