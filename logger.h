@@ -162,7 +162,7 @@ class Logger {
                 int dirABTime = toABTime(dirName);
 
                 if ((curABTime - dirABTime) > 31) {
-                    writeLog(std::format("Remove: {}\n", dirName));
+                    writeLog(std::format("Remove: {}\n", item.path().string()));
                     remove_all(item);
                 }
             }
@@ -981,7 +981,7 @@ class Logger {
     }
 
     void writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd, Mat &frame, unsigned int &frameCnt,
-                   vector<FireBox> &fboxes, int vchID, system_clock::time_point now) {
+                   int vchID, system_clock::time_point now) {
         if (!logEnable)
             return;
 
@@ -1319,31 +1319,21 @@ class Logger {
             }
 
             if (cfg.fdChannels[vchID]) {
-                int numFire = 0, numSmoke = 0;
-
-                for (auto &fbox : fboxes) {
-                    if (fbox.prob < cfg.fdScoreTh)
-                        continue;  // should check scores are ordered. Otherwise, use continue
-
-                    if (fbox.objID == FIRE)  // draw only the fire
-                        numFire++;
-
-                    if (fbox.objID == SMOKE)  // draw only the smoke
-                        numSmoke++;
-                }
+                int fireEvent = fdRcd.fireEvents[vchID];
+                int smokeEvent = fdRcd.smokeEvents[vchID];
 
                 int fireProb = fdRcd.fireProbsMul[vchID].back() * 1000;
                 int smokeProb = fdRcd.smokeProbsMul[vchID].back() * 1000;
                 int &afterFireEvent = fdRcd.afterFireEvents[vchID];
 
-                if (numFire || numSmoke || fireProb || smokeProb) {
+                if (fireEvent || smokeEvent || fireProb || smokeProb) {
                     string filename = std::format("{:02}{:02}{:02}.txt", curTm->tm_hour, curTm->tm_min, curTm->tm_sec);
                     string txtPathFD = string(FD_PATH) + "/" + dayInfo + "/" + to_string(vchID) + "/txts/" + filename;
                     ofstream logFileFD(txtPathFD);
                     int isFirst = (afterFireEvent == 0) ? 1 : 0;
 
                     if (logFileFD.is_open()) {
-                        logFileFD << isFirst << " " << numFire << " " << numSmoke << " " << fireProb << " "
+                        logFileFD << isFirst << " " << fireEvent << " " << smokeEvent << " " << fireProb << " "
                                   << smokeProb;
                         logFileFD.close();
                     }
@@ -1370,8 +1360,8 @@ class Logger {
                 if (smokeProb > maxSmokeProbs[vchID])
                     maxSmokeProbs[vchID] = smokeProb;
 
-                accNumFires[vchID] += numFire;
-                accNumSmokes[vchID] += numSmoke;
+                accNumFires[vchID] += fireEvent;
+                accNumSmokes[vchID] += smokeEvent;
             }
 
             if (cfg.ccChannels[vchID]) {
@@ -1437,13 +1427,18 @@ class Logger {
 
         for (int p = 0; p < 2; p++) {
             if (pageUpdated[p]) {
-                int msec5 = msec / 125;  // save at 5 fps
+                int msecD;
 
-                if (preTimes[p] != msec5) {
-                    preTimes[p] = msec5;
+                if (cfg.boostMode)
+                    msecD = msec / 100;  // save at 10 fps
+                else
+                    msecD = msec / 200;  // save at 5 fps
 
-                    // string filename = std::format("{}p{:02}{}.jpg", p, curTm->tm_sec, msec5);
-                    string filename = std::format("{}p{}{}.jpg", p, curTm->tm_sec % 10, msec5);
+                if (preTimes[p] != msecD) {
+                    preTimes[p] = msecD;
+
+                    // string filename = std::format("{}p{:02}{}.jpg", p, curTm->tm_sec, msecD);
+                    string filename = std::format("{}p{}{}.jpg", p, curTm->tm_sec % 10, msecD);
                     string imgPath = string(CHIMGS_PATH) + "/now/" + filename;
 
                     // for debug

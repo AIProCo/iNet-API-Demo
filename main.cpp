@@ -43,8 +43,8 @@
 #define CC_MD_CPU_FILEPATH "inputs/aipro_cc_1_4_2_cpu.nez"
 #define OD_MD_FILEPATH "inputs/aipro_od_1_4.net"
 #define OD_MD_CPU_FILEPATH "inputs/aipro_od_1_4_cpu.nez"
-#define FD_MD_FILEPATH "inputs/aipro_fd_1_4.net"
-#define FD_MD_CPU_FILEPATH "inputs/aipro_fd_1_4_cpu.nez"
+#define FD_MD_FILEPATH "inputs/aipro_fd_1_4_1.net"
+#define FD_MD_CPU_FILEPATH "inputs/aipro_fd_1_4_1_cpu.nez"
 #define PAR_MD_FILEPATH "inputs/aipro_par_1_4.net"
 #define PAR_MD_CPU_FILEPATH "inputs/aipro_par_1_4_cpu.nez"
 #define POSE_MD_FILEPATH ""
@@ -66,10 +66,10 @@ void loadIS(Config &cfg, string txtPathInit, vector<vector<int>> &cntLineParams,
 void drawZones(ODRecord &odRcd, Mat &img, int vchID, double alpha);
 void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha = 0.7,
                const vector<pair<int, int>> &skelPairs = cocoSkeletons);
-void drawBoxesFD(FDRecord &fdRcd, Mat &img, vector<FireBox> &fboxes, int vchID, float fdScoreTh);
+void drawFD(FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh);
 void drawCC(CCRecord &ccRcd, Mat &density, Mat &img, int vchID);
 
-void doRunModelFD(vector<FireBox> &fboxes, Mat &frame, int vchID, uint frameCnt, float fdScoreTh);
+void doRunModelFD(Mat &frame, int vchID, uint frameCnt);
 void doRunModelCC(Mat &density, Mat &frame, int vchID);
 
 std::atomic<bool> ccTreadDone = false;
@@ -85,6 +85,25 @@ int main() {
         cfg.lg("parseConfigAPI: Parsing Error!\n");
         return -1;
     }
+
+    int numFDChannels = 0, numCCChannels = 0;
+    for (int i = 0; i < cfg.numChannels; i++) {
+        if (cfg.fdChannels[i])
+            numFDChannels++;
+
+        if (cfg.ccChannels[i])
+            numCCChannels++;
+    }
+
+    int fdMinPeriod, ccMinPeriod;
+    if (cfg.boostMode) {
+        fdMinPeriod = 1;
+        ccMinPeriod = 1;
+    } else {
+        fdMinPeriod = 10;
+        ccMinPeriod = 17;
+    }
+    int fdPeriod = fdMinPeriod, ccPeriod = ccMinPeriod;
 
     std::function<void(std::string)> lg = cfg.lg;
 
@@ -106,16 +125,9 @@ int main() {
     int sleepPeriodMain = 0;
     vector<unsigned int> threadStartFDs(cfg.numChannels, 0);
     vector<unsigned int> threadStartCCs(cfg.numChannels, 0);
-
-    int periodFDMin = 10;
-    int periodFD = periodFDMin;
-    int periodCCMin = 17;
-    int periodCC = periodCCMin;
     thread *fdTh = NULL, *ccTh = NULL;
 
-    vector<vector<FireBox>> fboxesChPre(cfg.numChannels);
     vector<Mat> densityChPre(cfg.numChannels);
-    vector<FireBox> fboxes;
     Mat density;
 
     while (1) {
@@ -149,36 +161,31 @@ int main() {
                     fdTh->join();
                     fdTh = NULL;
 
-                    fboxesChPre[vchIDFD] = fboxes;  // vchIDFD can be different from vchID
-                    fboxes.clear();
-
                     bool periodChanged = true;
                     int threadGap = frameCnt - threadStartFD;
-                    if (periodFD < threadGap)
-                        ++periodFD;
-                    else if (periodFD > threadGap + 5 && periodFD > periodFDMin)
-                        --periodFD;
+                    if (fdPeriod < (numFDChannels - 1) * threadGap)
+                        ++fdPeriod;
+                    else if (fdPeriod > numFDChannels * threadGap && fdPeriod > fdMinPeriod)
+                        --fdPeriod;
                     else
                         periodChanged = false;
 
-                    // periodChanged = true;
-                    if (periodChanged)
-                        lg(std::format("  [{}]Frame {}: FD thread Gap = {}({} - {}), period = {}\n", vchID, frameCnt,
-                                       threadGap, frameCnt, threadStartFD, periodFD));
+                    //if (periodChanged)
+                    //    lg(std::format("  [{}]Frame {}: FD thread Gap = {}({} - {}), period = {}\n", vchID, frameCnt,                                       threadGap, frameCnt, threadStartFD, fdPeriod));
 
                     threadStartFD = frameCnt;  // for the following if-statement
                 }
 
-                if (threadStartFD + periodFD < frameCnt && fdTh == NULL) {
-                    // lg(std::format("[{}]FD thread Start frameCnt={} > threadStartFD={} + periodFD={}\n", vchID,
+                if (threadStartFD + fdPeriod < frameCnt && fdTh == NULL) {
+                    // lg(std::format("[{}]FD thread Start frameCnt={} > threadStartFD={} + fdPeriod={}\n", vchID,
                     // frameCnt,
-                    //                                         threadStartFD, periodFD));
+                    //                                         threadStartFD, fdPeriod));
                     static Mat frameFD;
 
                     frameFD = frame;
                     threadStartFD = frameCnt;
                     vchIDFD = vchID;
-                    fdTh = new thread(doRunModelFD, ref(fboxes), ref(frameFD), vchID, frameCnt, cfg.fdScoreTh);
+                    fdTh = new thread(doRunModelFD, ref(frameFD), vchID, frameCnt);
                 }
             }
 
@@ -195,25 +202,24 @@ int main() {
 
                     bool periodChanged = true;
                     int threadGap = frameCnt - threadStartCC;
-                    if (periodCC < threadGap)
-                        ++periodCC;
-                    else if (periodCC > threadGap + 10 && periodCC > periodCCMin)
-                        --periodCC;
+                    if (ccPeriod < (numCCChannels - 1) * threadGap)
+                        ++ccPeriod;
+                    else if (ccPeriod > numCCChannels * threadGap && ccPeriod > ccMinPeriod)
+                        --ccPeriod;
                     else
                         periodChanged = false;
 
-                    // periodChanged = true;
-                    if (periodChanged)
-                        lg(std::format("  [{}]Frame {}: CC thread Gap = {}({} - {}), period = {}\n", vchID, frameCnt,
-                                       threadGap, frameCnt, threadStartCC, periodCC));
+                    //if (periodChanged)
+                    //    lg(std::format("  [{}]Frame {}: CC thread Gap = {}({} - {}), period = {}\n", vchID, frameCnt,
+                    //                   threadGap, frameCnt, threadStartCC, ccPeriod));
 
                     threadStartCC = frameCnt;  // for the following if-statement
                 }
 
-                if (threadStartCC + periodCC < frameCnt && ccTh == NULL) {
-                    // lg(std::format("  [{}]CC thread Start frameCnt={} > threadStartCC={} + periodCC={}\n", vchID,
+                if (threadStartCC + ccPeriod < frameCnt && ccTh == NULL) {
+                    // lg(std::format("  [{}]CC thread Start frameCnt={} > threadStartCC={} + ccPeriod={}\n", vchID,
                     // frameCnt,
-                    //               threadStartCC, periodCC));
+                    //               threadStartCC, ccPeriod));
                     static Mat frameCC;
                     threadStartCC = frameCnt;
                     frameCC = frame;
@@ -232,7 +238,7 @@ int main() {
                     drawBoxes(cfg, odRcd, frame, dboxes, vchID);
 
                 if (cfg.fdChannels[vchID])
-                    drawBoxesFD(fdRcd, frame, fboxesChPre[vchID], vchID, cfg.fdScoreTh);
+                    drawFD(fdRcd, frame, vchID, cfg.fdScoreTh);
 
                 if (cfg.ccChannels[vchID])
                     drawCC(ccRcd, densityChPre[vchID], frame, vchID);
@@ -243,13 +249,13 @@ int main() {
             if (cfg.recording)
                 (streamer[vchID]) << frame;  // write a frame
 
-            logger.writeData(cfg, odRcd, fdRcd, ccRcd, frame, frameCnt, fboxesChPre[vchID], vchID, now);
+            logger.writeData(cfg, odRcd, fdRcd, ccRcd, frame, frameCnt, vchID, now);
 
             float inf0 = (end - start) / odBatchSize;
 
-            if (frameCnt % 50 == 0)
+            if (frameCnt % 20 == 0)
                 lg(std::format("[{}]Frame{:>4}>  SP({:>2}, {:>3}), Gap(FD: {}, CC: {}),  Buf: {},  Inf: {}ms\n", vchID,
-                               frameCnt, sleepPeriodMain, streamer.sleepPeriod, periodFD, periodCC,
+                               frameCnt, sleepPeriodMain, streamer.sleepPeriod, fdPeriod, ccPeriod,
                                streamer.unsafe_size(), inf0));
 
             if (frameCnt > 10 && frameCnt < 500)  // skip the start frames and limit the number of elements
@@ -293,8 +299,8 @@ int main() {
     return 0;
 }
 
-void doRunModelFD(vector<FireBox> &fboxes, Mat &frame, int vchID, uint frameCnt, float fdScoreTh) {
-    runModelFD(fboxes, frame, vchID, frameCnt, fdScoreTh);
+void doRunModelFD(Mat &frame, int vchID, uint frameCnt) {
+    runModelFD(frame, vchID, frameCnt);
     fdTreadDone = true;
 }
 
@@ -518,67 +524,48 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
     }
 }
 
-void drawBoxesFD(FDRecord &fdRcd, Mat &img, vector<FireBox> &fboxes, int vchID, float fdScoreTh) {
-    // const string *objNames = cfg.fdIDMapping.data();
-    const string objNames[] = {"smoke", "fire"};
+void drawFD(FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh) {
     time_t now = time(NULL);
+    int h = img.rows;
+    int w = img.cols;
+    string strFire = "X", strSmoke = "X";
 
-    vector<Rect> boxes;
-    vector<Scalar> boxesColor;
-    vector<vector<string>> boxTexts;
+    if (h < 280 || w < 220)
+        return;
 
-    if (DRAW_FIRE_DETECTION) {
-        for (auto &fbox : fboxes) {
-            if (fbox.objID >= NUM_CLASSES_FD)  // draw only the fire and smoke
-                continue;
+    const int fx = w - 190, fy = 190;
+    const vector<Point> ptsFire = {Point(fx + 0, fy + 54),  Point(fx + 24, fy + 0),  Point(fx + 45, fy + 48),
+                                   Point(fx + 54, fy + 21), Point(fx + 63, fy + 54), Point(fx + 54, fy + 87),
+                                   Point(fx + 15, fy + 87)};
 
-            Rect box(fbox.x, fbox.y, fbox.w, fbox.h);
-            boxes.push_back(box);
+    const int sx = w - 100, sy = 190;
+    const vector<Point> ptsSmoke = {Point(sx + 0, sy + 51),  Point(sx + 0, sy + 30),  Point(sx + 21, sy + 0),
+                                    Point(sx + 21, sy + 33), Point(sx + 63, sy + 42), Point(sx + 54, sy + 60),
+                                    Point(sx + 36, sy + 87), Point(sx + 36, sy + 65)};
 
-            int label = fbox.objID;
-            if (fbox.prob < fdScoreTh)
-                continue;  // should check scores are ordered. Otherwise, use continue
-
-            string objName = objNames[label] + "(" + to_string((int)(fbox.prob * 100 + 0.5)) + "%)";
-
-            Scalar boxColor;
-            if (label == FIRE)
-                boxColor = Scalar(0, 0, 255);
-            else
-                boxColor = Scalar(220, 200, 200);
-
-            char buf[80];
-            tm *curTm = localtime(&now);
-            strftime(buf, sizeof(buf), "Time: %H:%M:%S", curTm);
-            string timeInfo = string(buf);
-
-            // vector<string> texts{objName};
-            vector<string> texts{objName, timeInfo};
-
-            // texts.clear();
-
-            boxesColor.push_back(boxColor);
-            boxTexts.push_back(texts);
+    if (fdRcd.fireProbsMul[vchID].back() > fdScoreTh) {
+        if (DRAW_FIRE_DETECTION) {
+            /// draw canvas
+            Mat fdIconRegion = img(Rect(Point(fx - 4, fy - 2), Point(fx + 63 + 4, fy + 87 + 2)));
+            fdIconRegion -= Scalar(100, 100, 100);
+            fillPoly(img, ptsFire, Scalar(0, 0, 255));
         }
 
-        Vis::drawBoxesFD(img, boxes, boxesColor, boxTexts);
+        strFire = "O";
+    }
+
+    if (fdRcd.smokeProbsMul[vchID].back() > fdScoreTh) {
+        if (DRAW_FIRE_DETECTION) {
+            Mat smokeIconRegion = img(Rect(Point(sx - 4, sy - 2), Point(sx + 63 + 4, sy + 87 + 2)));
+            smokeIconRegion -= Scalar(100, 100, 100);
+            fillPoly(img, ptsSmoke, Scalar(200, 200, 200));
+        }
+
+        strSmoke = "O";
     }
 
     if (DRAW_FIRE_DETECTION_COUNTING) {
-        int numFire = 0, numSmoke = 0;
-
-        for (auto &fbox : fboxes) {
-            if (fbox.prob < fdScoreTh)
-                continue;  // should check scores are ordered. Otherwise, use continue
-
-            if (fbox.objID == FIRE)  // draw only the fire
-                numFire++;
-
-            if (fbox.objID == SMOKE)  // draw only the fire
-                numSmoke++;
-        }
-
-        string fdText = "Detection: Fire=" + to_string(numFire) + ", Smoke=" + to_string(numSmoke);
+        string fdText = "Event> Fire: " + strFire + ", Smoke: " + strSmoke;
         Vis::drawTextBlockFD(img, fdRcd, vchID, 40, fdText, 1, 2);
     }
 }
@@ -618,12 +605,18 @@ void drawCC(CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
         for (CCZone &ccZone : ccRcd.ccZones) {
             if (ccZone.ccZoneID != -1 && ccZone.vchID == vchID) {
                 string text =
-                    std::format("-CZone {}: {}({:>5})", ccZone.ccZoneID, ccZone.ccLevel, ccZone.ccNums.back());
+                    // std::format(" -CZone {}: {:>4}", ccZone.ccZoneID+1, ccZone.ccNums.back());
+                    std::format(" -CZone {}: {}({:>5})", ccZone.ccZoneID, ccZone.ccLevel, ccZone.ccNums.back());
                 ccTexts.push_back(text);
             }
         }
 
+        // Vis::drawTextBlock(img, Point(img.cols - 365, 100), ccTexts, 1, 2);
         Vis::drawTextBlock(img, Point(img.cols - 365, 400), ccTexts, 1, 2);
+
+        // for demo
+        // vector<string> tmp0 = {string("CZone 1")};
+        // Vis::drawTextBlock2(img, Point(800, 100), tmp0, 1, 2);
     }
 }
 
@@ -638,6 +631,7 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
     cfg.key = js["global"]["apikey"];
     cfg.recording = js["global"]["recording"];
     cfg.debugMode = js["global"]["debug_mode"];
+    cfg.boostMode = js["global"]["boost_mode"];
     cfg.logEnable = true;  // fixed
 
     int parsingMode = js["global"]["parsing_mode"];
@@ -686,21 +680,21 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
 
         if (cfg.odChannels.size() < cfg.numChannels) {
             for (int i = cfg.odChannels.size(); i < cfg.numChannels; i++)
-                cfg.odChannels.push_back(true);
+                cfg.odChannels.push_back(false);
         }
 
         if (cfg.fdChannels.size() < cfg.numChannels) {
             for (int i = cfg.fdChannels.size(); i < cfg.numChannels; i++)
-                cfg.fdChannels.push_back(true);
+                cfg.fdChannels.push_back(false);
         }
 
         if (cfg.ccChannels.size() < cfg.numChannels) {
             for (int i = cfg.ccChannels.size(); i < cfg.numChannels; i++)
-                cfg.ccChannels.push_back(true);
+                cfg.ccChannels.push_back(false);
         }
     }
 
-    cfg.maxBufferSize = 60;
+    cfg.maxBufferSize = cfg.numChannels * 4;
     cfg.vchStates.resize(cfg.numChannels, 0);
     cfg.frameWidths.resize(cfg.numChannels, 0);
     cfg.frameHeights.resize(cfg.numChannels, 0);
@@ -726,10 +720,11 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
     cfg.fdScaleFactorsInv.resize(cfg.numChannels, 0);
     cfg.fdBatchSize = 1;  // fixed(but support from 1 to 4)
     cfg.fdScoreTh = js["fd"]["score_th"];
-    cfg.fdIDMapping = {"smoke", "fire"};  // fixed (should be same as drawBoxesFD)
-    cfg.fdNumClasses = cfg.fdIDMapping.size();
+    cfg.fdIDMapping = {"both", "fire", "none", "smoke"};  // fixed (should be the same as fd modes in global.h)
+    // cfg.fdIDMapping = {"smoke", "fire"};  // fixed
+    cfg.fdNumClasses = NUM_FD_CLASSES;
     cfg.fdWindowSize = 32;
-    cfg.fdPeriod = 16;
+    cfg.fdPeriod = 16;  // check period in the idle mode
 
     // cc config
     cfg.ccEnable = js["cc"]["enable"];
@@ -738,6 +733,7 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
     cfg.ccScaleFactors.resize(cfg.numChannels, 0);
     cfg.ccScaleFactorsInv.resize(cfg.numChannels, 0);
     cfg.ccWindowSize = 32;
+    cfg.ccPeriod = 16;  // check period in the idle mode
 
     // tracking
     cfg.longLastingObjTh = 300;
@@ -865,6 +861,8 @@ bool setFDRecord(Config &cfg, FDRecord &fdRcd) {
             fdRcd.smokeProbsMul[i].resize(cfg.fdWindowSize, 0.0f);
         }
 
+        fdRcd.fireEvents.resize(cfg.numChannels, 0);
+        fdRcd.smokeEvents.resize(cfg.numChannels, 0);
         fdRcd.afterFireEvents.resize(cfg.numChannels, 0);
     }
 

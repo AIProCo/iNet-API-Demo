@@ -20,7 +20,7 @@
  * @param cfg configuration struct
  * @param odRcd object detection record struct
  * @param fdRcd fire detection record struct
- * @param ccRcd crowd counting record struct
+ * @param ccRcd crowd counter record struct
  * @return initialization result(true: success, false: fail)
  */
 GENERATOR_API bool initModel(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
@@ -53,26 +53,12 @@ GENERATOR_API bool runModel(std::vector<std::vector<DetBox>> &dboxesMul, std::ve
 
 /** @brief Run fire detection for a single frame
  *
- * @param fboxes return detected fboxes of the vchID channel
  * @param frame input frame
  * @param vchID vchID of the input frame
  * @param frameCnt frameCnt of the input frame
- * @param fdScoreTh threshold for filtering low confident detections
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModelFD(std::vector<FireBox> &fboxes, cv::Mat &frame, int vchID, uint &frameCnt, float fdScoreTh);
-
-/** @brief Run fire detection for a frame batch
- *
- * @param fboxesMulP return detected fboxes of all video channels(vchIDs)
- * @param frames batch of frames
- * @param vchIDs vchIDs of batched frames
- * @param frameCnts frameCnts of batched frames
- * @param fdScoreTh threshold for filtering low confident detections
- * @return flag for the running result(true: success, false: fail)
- */
-GENERATOR_API bool runModelFD(std::vector<std::vector<FireBox>> &fboxesMul, std::vector<cv::Mat> &frames,
-                              std::vector<int> &vchIDs, std::vector<uint> &frameCnts, float fdScoreTh);
+GENERATOR_API bool runModelFD(cv::Mat &frame, int vchID, uint &frameCnt);
 
 /** @brief Run crowd counter for a single frame
  *

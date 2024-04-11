@@ -20,7 +20,12 @@ CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CC
     outputs = cfg.outputFiles;
 
     stopFlag = false;
-    initSleepPeriod = 120;  // 180;//150;
+
+    if (cfg.boostMode)
+        initSleepPeriod = 90;  // for 10 fps
+    else
+        initSleepPeriod = 180;  // for 5 fps
+
     sleepPeriod = initSleepPeriod;
 
     videoWriters.resize(numChannels);

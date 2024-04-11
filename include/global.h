@@ -21,8 +21,8 @@
 #define NET_WIDTH_OD 960   /// net width for od
 #define NET_HEIGHT_OD 544  /// net height for od
 
-#define NET_WIDTH_FD NET_WIDTH_OD    /// net width for fd
-#define NET_HEIGHT_FD NET_HEIGHT_OD  /// net height for fd
+#define NET_WIDTH_FD 640   /// net width for fd
+#define NET_HEIGHT_FD 360  /// net height for fd
 
 #define NUM_CC_LEVELS 4
 #define NET_WIDTH_CC 1920   /// net width for cc
@@ -61,6 +61,12 @@
 #define ATT_BACKPACK 27
 #define ATT_BAG 28
 #define ATT_HAT 29
+
+#define NUM_FD_CLASSES 4
+#define FD_CLASS_BOTH 0
+#define FD_CLASS_FIRE 1
+#define FD_CLASS_NONE 2
+#define FD_CLASS_SMOKE 3
 
 //#define NUM_ATTRIBUTES 4  /// number of attributes(should be compatible with the PAR model)
 //#define ATT_GENDER 0  /// gender should be the first att in a mapping list
@@ -169,7 +175,9 @@ struct ODRecord {
 struct FDRecord {
     std::vector<std::deque<float>> fireProbsMul;   // fire probability
     std::vector<std::deque<float>> smokeProbsMul;  // smoke probability
-    std::vector<int> afterFireEvents;              /// for internal usage in logger
+    std::vector<int> fireEvents;                   // fire event
+    std::vector<int> smokeEvents;                  // smoke event
+    std::vector<int> afterFireEvents;              // for internal usage in logger
 };
 
 struct CCRecord {
@@ -281,14 +289,6 @@ struct DetBox {
     int actSetCnt;  /// time elapsed since the last act info was detected
 };
 
-struct FireBox {
-    int x, y, w, h;  /// (x, y): top-left corner, (w, h): width & height of bounded box
-    int objID;       /// class of object - from range [0, classes-1]
-    int vchID;       /// video channel id
-    uint frameCnt;   /// frame cnt
-    float prob;      /// confidence - probability that the object was found correctly
-};
-
 class Logger;
 
 struct Config {
@@ -298,6 +298,7 @@ struct Config {
     std::vector<std::string> outputFiles;  /// list of the output files
     bool recording;                        /// record output videos
     bool debugMode;                        /// output debug info and frames
+    bool boostMode;                        /// enable boost mode(minimize delay)
     bool logEnable;
 
     // config
@@ -362,6 +363,7 @@ struct Config {
     std::vector<float> ccScaleFactorsInv;
     std::string ccModelFile;  /// crowd counting model file
     int ccWindowSize;
+    int ccPeriod;  /// fire detection period
 
     // pose config
     bool poseEnable;            /// Enable pose
