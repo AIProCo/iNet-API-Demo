@@ -10,6 +10,7 @@
 #include <deque>
 
 #include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp >
 
 /// System
 #define PERSON 0  /// person should be the first object in a mapping list
@@ -157,14 +158,98 @@ struct CCZone {
     int ccLevelThs[NUM_CC_LEVELS - 1];  /// ccLevel1, ccLevel2, ccLevel3
     int ccLevel;                        /// current ccLevel
     int preCCLevel;                     /// previous ccLevel
-    cv::Mat mask;                       /// mask
+    cv::Mat mask;                       /// for internal usage in CrowdCounter(for GPU and CPU modes)
 
+#ifdef _CPU_INFER
+    cv::Mat canvas, roiCanvas;            /// for internal usage in CrowdCounter(only for CPU)
+    cv::Point roiTL, roiBR, roiBRScaled;  /// for internal usage in CrowdCounter(only for CPU)
+    cv::Size roiScaledSize;
+    double sH, sW;
+    // int roiScaledH, roiScaledW;
+
+    void setCanvas(cv::Mat &frame) {
+        if (canvas.empty())
+            initCanvas(frame);
+
+        cv::Mat roi = frame(cv::Rect(roiTL, roiBR));
+        cv::Mat roiScaled;
+
+        if (roi.size() == roiScaledSize)
+            roiScaled = roi;
+        else
+            cv::resize(roi, roiScaled, roiScaledSize);
+
+        roiCanvas = roiScaled.mul(mask);
+    }
+
+    void initCanvas(cv::Mat &frame) {
+        sH = (float)NET_HEIGHT_CC / frame.rows;
+        sW = (float)NET_WIDTH_CC / frame.cols;
+
+        canvas = cv::Mat::zeros(NET_HEIGHT_CC, NET_WIDTH_CC, CV_8UC3);
+
+        roiTL = cv::Point(INT_MAX, INT_MAX);
+        roiBR = cv::Point(0, 0);
+
+        for (auto &pt : pts) {
+            if (pt.x < roiTL.x)
+                roiTL.x = pt.x;
+
+            if (pt.y < roiTL.y)
+                roiTL.y = pt.y;
+
+            if (pt.x > roiBR.x)
+                roiBR.x = pt.x;
+
+            if (pt.y > roiTL.y)
+                roiBR.y = pt.y;
+        }
+
+        std::vector<cv::Point> movedPts;
+        for (auto &pt : pts) {
+            cv::Point movedPt;
+            movedPt.x = (pt.x - roiTL.x) * sW;
+            movedPt.y = (pt.y - roiTL.y) * sH;
+            movedPts.push_back(movedPt);
+        }
+
+        roiScaledSize.height = (roiBR.y - roiTL.y) * sH;
+        roiScaledSize.width = (roiBR.x - roiTL.x) * sW;
+
+        roiCanvas = canvas(cv::Rect(0, 0, roiScaledSize.width, roiScaledSize.height));
+        mask = cv::Mat::zeros(roiScaledSize.height, roiScaledSize.width, CV_8UC3);
+        cv::fillConvexPoly(mask, movedPts, cv::Scalar(1, 1, 1));
+    }
+#endif
     int maxCC;                              /// for internal usage in logger
     int maxCCDay;                           /// for internal usage in logger
     int accCCLevels[NUM_CC_LEVELS - 1];     /// for internal usage in logger
     int accCCLevelsDay[NUM_CC_LEVELS - 1];  /// for internal usage in logger
 
     std::deque<int> ccNums;
+
+    void pushCCNum(int ccNum) {
+        if (ccNums.size() <= 0)
+            return;
+
+        if (ccNum > 10) {
+            int preCCNum = ccNums.back();
+
+            if (preCCNum > 10)
+                ccNum = ccNum * 0.8f + preCCNum * 0.2f;
+        }
+
+        ccNums.pop_front();
+        ccNums.push_back(ccNum);
+
+        ccLevel = 0;
+        for (int l = 2; l >= 0; l--) {
+            if (ccNum > ccLevelThs[l]) {
+                ccLevel = l + 1;
+                break;
+            }
+        }
+    }
 };
 
 struct ODRecord {
@@ -299,6 +384,7 @@ struct Config {
     bool recording;                        /// record output videos
     bool debugMode;                        /// output debug info and frames
     bool boostMode;                        /// enable boost mode(minimize delay)
+    bool igpuEnable;                       /// use igpu if present
     bool logEnable;
 
     // config

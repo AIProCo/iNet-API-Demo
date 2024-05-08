@@ -297,7 +297,6 @@ class Logger {
             }
             for (auto &ccZone : ccRcd.ccZones) {
                 is << 2 << " ";
-#ifndef _CPU_INFER
                 is << ccZone.ccZoneID << " ";
                 is << ccZone.vchID << " ";
                 is << ccZone.pts[0].x << " ";
@@ -308,9 +307,6 @@ class Logger {
                 is << ccZone.pts[2].y << " ";
                 is << ccZone.pts[3].x << " ";
                 is << ccZone.pts[3].y << " ";
-#else
-                is << ccZone.vchID << " ";
-#endif
                 is << ccZone.ccLevelThs[0] << " ";
                 is << ccZone.ccLevelThs[1] << " ";
                 is << ccZone.ccLevelThs[2] << endl;
@@ -672,7 +668,7 @@ class Logger {
                         ss >> zone.isMode;
 
                         if (zone.vchID >= cfg.numChannels) {
-                            writeLog(std::format("zone.vchID error: {} {}", zone.vchID, cfg.numChannels));
+                            writeLog(std::format("zone.vchID error: {} {}\n", zone.vchID, cfg.numChannels));
                             return false;
                         }
 
@@ -686,12 +682,12 @@ class Logger {
                             zone.pts.push_back(pt);
 
                             if (pt.x < 0 || pt.x >= fW) {
-                                writeLog(std::format("zone.pts.x error: {} {}", pt.x, fW));
+                                writeLog(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
                                 return false;
                             }
 
                             if (pt.y < 0 || pt.y >= fH) {
-                                writeLog(std::format("zone.pts.y error: {} {}", pt.y, fH));
+                                writeLog(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
                                 return false;
                             }
                         }
@@ -734,14 +730,30 @@ class Logger {
 
                         ccZone.enabled = true;
                         ccZone.ccLevel = 0;
-#ifndef _CPU_INFER
+                        ccZone.preCCLevel = 0;
+
                         ss >> ccZone.ccZoneID;
                         ss >> ccZone.vchID;
 
                         if (ccZone.vchID >= cfg.numChannels) {
-                            writeLog(std::format("ccZone.vchID error: {} {}", ccZone.vchID, cfg.numChannels));
+                            writeLog(std::format("ccZone.vchID error: {} {}\n", ccZone.vchID, cfg.numChannels));
                             return false;
                         }
+
+#ifdef _CPU_INFER
+                        bool isFirst = true;
+                        for (auto &item : ccRcd.ccZones) {  // Store only one ccZone for each vchID
+                            if (item.vchID == ccZone.vchID) {
+                                isFirst = false;
+                                break;
+                            }
+                        }
+
+                        if (!isFirst) {
+                            cout << "CCZone error!: Only one cczone can be used in cpu mode\n";
+                            continue;
+                        }
+#endif
 
                         int fH = cfg.frameHeights[ccZone.vchID];
                         int fW = cfg.frameWidths[ccZone.vchID];
@@ -753,28 +765,25 @@ class Logger {
                             ccZone.pts.push_back(pt);
 
                             if (pt.x < 0 || pt.x >= fW) {
-                                writeLog(std::format("zone.pts.x error: {} {}", pt.x, fW));
+                                writeLog(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
                                 return false;
                             }
 
                             if (pt.y < 0 || pt.y >= fH) {
-                                writeLog(std::format("zone.pts.y error: {} {}", pt.y, fH));
+                                writeLog(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
                                 return false;
                             }
                         }
-#else
-                        ccZone.ccZoneID = -1;
-                        ss >> ccZone.vchID;
 
-                        if (ccZone.vchID >= cfg.numChannels) {
-                            writeLog(std::format("ccZone.vchID error: {} {}", ccZone.vchID, cfg.numChannels));
-                            return false;
-                        }
-
-#endif
                         ss >> ccZone.ccLevelThs[0];
                         ss >> ccZone.ccLevelThs[1];
                         ss >> ccZone.ccLevelThs[2];
+
+                        if (ccZone.ccLevelThs[0] > ccZone.ccLevelThs[1] ||
+                            ccZone.ccLevelThs[1] > ccZone.ccLevelThs[2]) {
+                            cout << "ccLevelThs should be ordered.\n";
+                            return false;
+                        }
 
                         ccZone.ccNums.resize(cfg.ccWindowSize, 0);
 
@@ -788,6 +797,10 @@ class Logger {
 
                         // init mask with empty Mat. This is generated in CrowdCounter::runModel.
                         ccZone.mask = cv::Mat();
+#ifdef _CPU_INFER
+                        ccZone.canvas = cv::Mat();
+                        ccZone.roiCanvas = cv::Mat();
+#endif
 
                         bool duplicated = false;
                         for (auto &item : ccRcd.ccZones) {
@@ -807,12 +820,13 @@ class Logger {
 
                         ccZone.enabled = true;
                         ccZone.ccLevel = 0;
-#ifndef _CPU_INFER
+                        ccZone.preCCLevel = 0;
+
                         ss >> ccZone.ccZoneID;
                         ss >> ccZone.vchID;
 
                         if (ccZone.vchID >= cfg.numChannels) {
-                            writeLog(std::format("ccZone.vchID error: {} {}", ccZone.vchID, cfg.numChannels));
+                            writeLog(std::format("ccZone.vchID error: {} {}\n", ccZone.vchID, cfg.numChannels));
                             return false;
                         }
 
@@ -826,37 +840,32 @@ class Logger {
                             ccZone.pts.push_back(pt);
 
                             if (pt.x < 0 || pt.x >= fW) {
-                                writeLog(std::format("zone.pts.x error: {} {}", pt.x, fW));
+                                writeLog(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
                                 return false;
                             }
 
                             if (pt.y < 0 || pt.y >= fH) {
-                                writeLog(std::format("zone.pts.y error: {} {}", pt.y, fH));
+                                writeLog(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
                                 return false;
                             }
                         }
-#else
-                        ccZone.ccZoneID = -1;
-                        ss >> ccZone.vchID;
 
-                        if (ccZone.vchID >= cfg.numChannels) {
-                            writeLog(std::format("ccZone.vchID error: {} {}", ccZone.vchID, cfg.numChannels));
-                            return false;
-                        }
-#endif
                         ss >> ccZone.ccLevelThs[0];
                         ss >> ccZone.ccLevelThs[1];
                         ss >> ccZone.ccLevelThs[2];
 
                         for (auto &item : ccRcd.ccZones) {
                             if (item.vchID == ccZone.vchID && item.ccZoneID == ccZone.ccZoneID) {
-#ifndef _CPU_INFER
                                 std::copy(ccZone.pts.begin(), ccZone.pts.end(), item.pts.begin());
-#endif
                                 item.ccLevelThs[0] = ccZone.ccLevelThs[0];
                                 item.ccLevelThs[1] = ccZone.ccLevelThs[1];
                                 item.ccLevelThs[2] = ccZone.ccLevelThs[2];
 
+                                item.mask = cv::Mat();
+#ifdef _CPU_INFER
+                                item.canvas = cv::Mat();
+                                item.roiCanvas = cv::Mat();
+#endif
                                 break;
                             }
                         }
@@ -864,22 +873,21 @@ class Logger {
                     }
                     case CMD_REMOVE_CCZONE: {
                         int ccZoneID, vchID;
-#ifndef _CPU_INFER
+
                         ss >> ccZoneID;
-#else
-                        ccZoneID = -1;
-#endif
                         ss >> vchID;
 
                         if (vchID >= cfg.numChannels) {
-                            writeLog(std::format("vchID error in remove cczone: {} {}", vchID, cfg.numChannels));
+                            writeLog(std::format("vchID error in remove cczone: {} {}\n", vchID, cfg.numChannels));
                             return false;
                         }
 
                         for (auto itr = ccRcd.ccZones.begin(); itr != ccRcd.ccZones.end();) {
-                            if (itr->ccZoneID == ccZoneID && itr->vchID == vchID)
+                            if (itr->ccZoneID == ccZoneID && itr->vchID == vchID) {
+                                itr->enabled = false;
+                                itr->vchID = -1;
                                 itr = ccRcd.ccZones.erase(itr);
-                            else
+                            } else
                                 ++itr;
                         }
                         break;
