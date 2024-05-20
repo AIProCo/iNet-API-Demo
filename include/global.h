@@ -69,12 +69,6 @@
 #define FD_CLASS_NONE 2
 #define FD_CLASS_SMOKE 3
 
-//#define NUM_ATTRIBUTES 4  /// number of attributes(should be compatible with the PAR model)
-//#define ATT_GENDER 0  /// gender should be the first att in a mapping list
-//#define ATT_CHILD 1
-//#define ATT_ADULT 2
-//#define ATT_ELDER 3
-
 #define NUM_GENDERS 2
 #define MALE 0
 #define FEMALE 1
@@ -83,8 +77,6 @@
 #define CHILD_GROUP 0
 #define ADULT_GROUP 1
 #define ELDER_GROUP 2
-
-#define NUM_SKEL_KEYPOINTS 17
 
 /// data structure
 #define LOG_ENABLE true
@@ -319,33 +311,6 @@ struct PedAtts {
     }
 };
 
-/// Pose Information
-const std::vector<std::pair<int, int>> cocoSkeletons = {
-    {16, 14}, {14, 12}, {17, 15}, {15, 13}, {12, 13}, {6, 12}, {7, 13}, {6, 7}, {6, 8}, {7, 9},
-    {8, 10},  {9, 11},  {2, 3},   {1, 2},   {1, 3},   {2, 4},  {3, 5},  {4, 6}, {5, 7}};
-
-/// class representing a single Keypoint in pose estimation
-class SKeyPoint {
-   public:
-    int pointIdx;
-    float x;
-    float y;
-    float confScore;  /// confidence score
-    SKeyPoint(int _pointIdx = 0, float _x = -1.0f, float _y = -1.0f, float _conf = 0.0f) {
-        pointIdx = _pointIdx;
-        x = _x;
-        y = _y;
-        confScore = _conf;
-    }
-    friend std::ostream &operator<<(std::ostream &os, const SKeyPoint &kpt) {
-        os << "[" << kpt.pointIdx << "-(" << kpt.x << "," << kpt.y << ")," << kpt.confScore << "]";
-        return os;
-    }
-};
-
-/// data structure for a pose estimation result for a single person-type bbox
-typedef std::vector<SKeyPoint> Skeleton;
-
 /// data structure for object detection result
 struct DetBox {
     int x, y, w, h;   /// (x, y): top-left corner, (w, h): width & height of bounded box
@@ -366,12 +331,6 @@ struct DetBox {
     uchar justCountedZone;  /// for emphasizing the object just counted (15:lastest - 0:no action)
 
     PedAtts patts;  /// PAR info
-
-    Skeleton skel;  /// skel info
-
-    int actID;      /// action ID in actIDMapping
-    float actConf;  /// confidence of the current act
-    int actSetCnt;  /// time elapsed since the last act info was detected
 };
 
 class Logger;
@@ -451,30 +410,5 @@ struct Config {
     int ccWindowSize;
     int ccPeriod;  /// fire detection period
 
-    // pose config
-    bool poseEnable;            /// Enable pose
-    std::string poseModelFile;  /// pose model file (ex: hrnet_crowdHuman.onnx)
-    float poseScoreTh;          /// threshold for filtering low score keypoinits
-    int poseBatchSize;          /// batch size of the pose onnx model
-
-    // action config
-    bool actEnable;            /// enable action recognition
-    std::string actModelFile;  /// act model file (ex: aipro_act_t17_b2.onnx)
-    std::vector<std::string> actIDMapping;
-    float actScoreTh;      /// threshold for filtering low confident actions
-    float heatmapScoreTh;  /// threshold for filtering low confident keypoint in heatmap generation
-    int actBatchSize;      /// batch size of the act onnx model
-    int actUpdatePeriod;   /// action info updata period(= act model inference period)
-    int actLastPeriod;     /// time period to keep the action info (used in tracking)
-    bool multiPersons;     /// generate clip using multiple persons
-    int clipLength;        /// length of the clip
-    int missingLimit;      /// frame-missing-tolerance limit
-    int maxNumClips;       /// maximum number of clips to be stored at a time
-
     std::function<void(std::string)> lg;
 };
-
-// reading/writing -> motionless
-const std::vector<std::string> aipro_t17 = {
-    "hand on mouth", "pick up",    "throw",     "sit down",   "stand up", "clapping", "motionless", "hand wave", "kick",
-    "cross hands",   "staggering", "fall down", "punch/slap", "push",     "walk",     "squat down", "run"};

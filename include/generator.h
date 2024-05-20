@@ -32,11 +32,9 @@ GENERATOR_API bool initModel(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRe
  * @param vchID vchID of the input frame
  * @param frameCnt frameCnt of the input frame
  * @param odScoreTh threshold for filtering low confident detections
- * @param actScoreTh threshold for filtering low confident actions
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModel(std::vector<DetBox> &dboxes, cv::Mat &frame, int vchID, uint frameCnt, float odScoreTh,
-                            float actScoreTh);
+GENERATOR_API bool runModel(std::vector<DetBox> &dboxes, cv::Mat &frame, int vchID, uint frameCnt, float odScoreTh);
 
 /** @brief Run detection and PAR models for a frame batch
  *
@@ -45,11 +43,10 @@ GENERATOR_API bool runModel(std::vector<DetBox> &dboxes, cv::Mat &frame, int vch
  * @param vchIDs vchIDs of batched frames
  * @param frameCnts frameCnts of batched frames
  * @param odScoreTh threshold for filtering low confident detections
- * @param actScoreTh threshold for filtering low confident actions
  * @return flag for the running result(true: success, false: fail)
  */
 GENERATOR_API bool runModel(std::vector<std::vector<DetBox>> &dboxesMul, std::vector<cv::Mat> &frames,
-                            std::vector<int> &vchIDs, std::vector<uint> &frameCnts, float odScoreTh, float actScoreTh);
+                            std::vector<int> &vchIDs, std::vector<uint> &frameCnts, float odScoreTh);
 
 /** @brief Run fire detection for a single frame
  *

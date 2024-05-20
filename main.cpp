@@ -35,8 +35,6 @@
 #define DRAW_ZONE_COUNTING true
 #define DRAW_CC true
 #define DRAW_CC_COUNTING true
-#define DRAW_POSE false
-#define DRAW_ACTION false
 
 #define CFG_FILEPATH "inputs/config.json"
 #define CC_MD_FILEPATH "inputs/aipro_cc_1_4_2.net"
@@ -47,8 +45,6 @@
 #define FD_MD_CPU_FILEPATH "inputs/aipro_fd_1_4_2_cpu.nez"
 #define PAR_MD_FILEPATH "inputs/aipro_par_1_4.net"
 #define PAR_MD_CPU_FILEPATH "inputs/aipro_par_1_4_cpu.nez"
-#define POSE_MD_FILEPATH ""
-#define ACT_MD_FILEPATH ""
 
 using namespace std;
 using namespace cv;
@@ -64,8 +60,7 @@ bool setFDRecord(Config &cfg, FDRecord &fdRcd);
 void loadIS(Config &cfg, string txtPathInit, vector<vector<int>> &cntLineParams, vector<vector<int>> &zoneParams,
             vector<vector<int>> &ccZoneParams);
 void drawZones(Config &cfg, ODRecord &odRcd, Mat &img, int vchID, double alpha);
-void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha = 0.7,
-               const vector<pair<int, int>> &skelPairs = cocoSkeletons);
+void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha = 0.7);
 void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh);
 void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID);
 
@@ -245,7 +240,7 @@ int main() {
 
             vector<DetBox> dboxes;
             if (cfg.odChannels[vchID])
-                runModel(dboxes, frame, vchID, frameCnt, cfg.odScoreTh, cfg.actScoreTh);
+                runModel(dboxes, frame, vchID, frameCnt, cfg.odScoreTh);
 
             bool needToDraw = logger.needToDraw(vchID);
             if (needToDraw || cfg.recording) {
@@ -352,8 +347,7 @@ void drawZones(Config &cfg, ODRecord &odRcd, Mat &img, int vchID, double alpha) 
     }
 }
 
-void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha,
-               const vector<pair<int, int>> &skelPairs) {
+void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha) {
     const string *objNames = cfg.odIDMapping.data();
     time_t now = time(NULL);
 
@@ -426,15 +420,6 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
                         " (" + to_string(probAgeGroup) + "%)";
                     texts.push_back(ageGroupInfo);
                 }
-
-                if (cfg.actEnable && DRAW_ACTION) {
-                    if (dbox.actID != -1) {
-                        string actInfo;
-                        actInfo = "Action: " + cfg.actIDMapping[dbox.actID] + " (" +
-                                  to_string((int)(dbox.actConf * 100)) + "%)-" + to_string(dbox.actSetCnt);
-                        texts.push_back(actInfo);
-                    }
-                }
             }
         }
 
@@ -445,28 +430,6 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
             emphasizes.push_back(true);
         else
             emphasizes.push_back(false);
-
-        if (cfg.poseEnable && DRAW_POSE) {
-            Skeleton &skel = dbox.skel;
-
-            if (skel.size() != NUM_SKEL_KEYPOINTS)
-                continue;
-
-            for (auto const &kpt : skel) {
-                float x = kpt.x;
-                float y = kpt.y;
-                if (kpt.confScore >= cfg.poseScoreTh) {
-                    cv::circle(img, cv::Point(x, y), 4, cv::Scalar(0, 0, 255), 2, LINE_AA);
-                }
-            }
-            for (auto const &pair : skelPairs) {
-                SKeyPoint p1 = skel[pair.first - 1];
-                SKeyPoint p2 = skel[pair.second - 1];
-                if (p1.confScore >= cfg.poseScoreTh && p2.confScore >= cfg.poseScoreTh) {
-                    cv::line(img, cv::Point(p1.x, p1.y), cv::Point(p2.x, p2.y), cv::Scalar(0, 255, 0), 2, LINE_AA);
-                }
-            }
-        }
     }
 
     Vis::drawBoxes(img, boxes, boxesColor, boxTexts, emphasizes);
@@ -673,6 +636,10 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
     json js;
     cfgFile >> js;
 
+    // logger
+    cfg.lg = Logger::writeLog;
+    cfg.lg("Start parsing config....\n");
+
     // apikey, gpu_id
     cfg.frameLimit = js["global"]["frame_limit"];
     cfg.key = js["global"]["apikey"];
@@ -801,33 +768,8 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
     cfg.numAtts = NUM_ATTRIBUTES;
     cfg.attUpdatePeriod = 15;
 
-    // pose config
-    cfg.poseEnable = false;
-    cfg.poseScoreTh = 0.4;
-    cfg.poseModelFile = POSE_MD_FILEPATH;
-    cfg.poseBatchSize = 4;
-
-    // action config
-    cfg.actEnable = false;
-    cfg.actScoreTh = 0.7;
-    cfg.heatmapScoreTh = 0.25f;
-    cfg.actModelFile = ACT_MD_FILEPATH;
-    cfg.actIDMapping = aipro_t17;
-    cfg.actBatchSize = 1;  // fixed
-    cfg.actUpdatePeriod = 12;
-    cfg.actLastPeriod = 48;
-    cfg.multiPersons = false;  // fixed
-
-    // clip config
-    cfg.clipLength = 48;
-    cfg.missingLimit = 12;
-    cfg.maxNumClips = 8;  // 2 * cfg.poseBatchSize;  // can be set to an arbitrary number
-
     // counting
     cfg.debouncingTh = 20;
-
-    // logger
-    cfg.lg = Logger::writeLog;
 
 #ifndef _CPU_INFER
     cfg.lg("Do inference using GPU\n");
@@ -898,6 +840,7 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
         return false;
     }
 
+    cfg.lg("End parsing config....\n\n");
     return true;
 }
 
