@@ -4,10 +4,18 @@
 =============================================================================*/
 #pragma once
 
+#ifdef _WIN32
 #ifdef GENERATOR_EXPORTS
 #define GENERATOR_API __declspec(dllexport)
 #else
 #define GENERATOR_API __declspec(dllimport)
+#endif
+#else  // changed for linux jetson
+#ifdef GENERATOR_EXPORTS
+#define GENERATOR_API __attribute__((visibility("default")))
+#else
+#define GENERATOR_API
+#endif
 #endif
 
 #include <iostream>

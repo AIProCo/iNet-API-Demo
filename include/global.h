@@ -80,15 +80,21 @@
 
 /// data structure
 #define LOG_ENABLE true
-#define AIPRO_PATH "c:/aipro"
-#define ROOT_PATH "c:/aipro/data"
-#define CONFIG_PATH "c:/aipro/data/config"
-#define CHIMGS_PATH "c:/aipro/data/chimgs"
-#define CNT_PATH "c:/aipro/data/cnt"
-#define CC_PATH "c:/aipro/data/cc"
-#define FD_PATH "c:/aipro/data/fd"
-#define LOG_PATH "c:/aipro/data/log"
-#define VIDEO_OUT_PATH "c:/aipro/inet/videos"
+
+#ifdef _WIN32
+#define AIPRO_PATH "c:/aipro/"
+#else
+#define AIPRO_PATH "/home/aipro/jetson/"
+#endif
+
+#define ROOT_PATH AIPRO_PATH "data"
+#define CONFIG_PATH ROOT_PATH "config"
+#define CHIMGS_PATH ROOT_PATH "chimgs"
+#define CNT_PATH ROOT_PATH "cnt"
+#define CC_PATH ROOT_PATH "cc"
+#define FD_PATH ROOT_PATH "fd"
+#define LOG_PATH ROOT_PATH "log"
+#define VIDEO_OUT_PATH AIPRO_PATH "inet/videos"
 
 /// s2e commands
 #define CMD_INSERT_LINE 0

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <format>
 #include <chrono>
+#include <thread>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -36,15 +37,16 @@
 #define DRAW_CC true
 #define DRAW_CC_COUNTING true
 
-#define CFG_FILEPATH "inputs/config.json"
-#define CC_MD_FILEPATH "inputs/aipro_cc_1_4_2.net"
-#define CC_MD_CPU_FILEPATH "inputs/aipro_cc_1_4_2_cpu.nez"
-#define OD_MD_FILEPATH "inputs/aipro_od_1_4.net"
-#define OD_MD_CPU_FILEPATH "inputs/aipro_od_1_4_cpu.nez"
-#define FD_MD_FILEPATH "inputs/aipro_fd_1_4_2.net"
-#define FD_MD_CPU_FILEPATH "inputs/aipro_fd_1_4_2_cpu.nez"
-#define PAR_MD_FILEPATH "inputs/aipro_par_1_4.net"
-#define PAR_MD_CPU_FILEPATH "inputs/aipro_par_1_4_cpu.nez"
+#define INPUT_DIRECTORY "inputs/"
+#define CFG_FILEPATH INPUT_DIRECTORY "config.json"
+#define CC_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.net"
+#define CC_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.nez"
+#define OD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4.net"
+#define OD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4.nez"
+#define FD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_3.net"
+#define FD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_3.nez"
+#define PAR_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_par_1_4.net"
+#define PAR_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_par_1_4.nez"
 
 using namespace std;
 using namespace cv;
@@ -134,7 +136,7 @@ int main() {
 
     while (1) {
         if (sleepPeriodMain > 0)
-            Sleep(sleepPeriodMain);
+            this_thread::sleep_for(std::chrono::milliseconds(sleepPeriodMain));
 
         if (!streamer.empty()) {
             CMat cframe;
@@ -160,7 +162,7 @@ int main() {
                 if (fdTh != NULL && fdTreadDone && vchID == vchIDFD) {
                     fdTreadDone = false;
 
-                    fdTh->join();
+                    fdTh->join();  // needed??
                     fdTh = NULL;
 
                     bool periodChanged = true;
@@ -196,7 +198,7 @@ int main() {
                 if (ccTh != NULL && ccTreadDone && vchID == vchIDCC) {
                     ccTreadDone = false;
 
-                    ccTh->join();  //필요할까??
+                    ccTh->join();  // needed??
                     ccTh = NULL;
 
                     densityChPre[vchIDCC] = density;
@@ -774,10 +776,10 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
 #ifndef _CPU_INFER
     cfg.lg("Do inference using GPU\n");
 
-    cfg.odModelFile = OD_MD_FILEPATH;
-    cfg.fdModelFile = FD_MD_FILEPATH;
-    cfg.parModelFile = PAR_MD_FILEPATH;
-    cfg.ccModelFile = CC_MD_FILEPATH;
+    cfg.odModelFile = OD_MD_GPU_FILEPATH;
+    cfg.fdModelFile = FD_MD_GPU_FILEPATH;
+    cfg.parModelFile = PAR_MD_GPU_FILEPATH;
+    cfg.ccModelFile = CC_MD_GPU_FILEPATH;
     cfg.parLightMode = true;
 #else
     cfg.lg("Do inference using CPU\n");

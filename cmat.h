@@ -1,10 +1,15 @@
 #pragma once
 #include <iostream>
-#include <concurrent_queue.h>
 #include <opencv2/opencv.hpp>
 
+#ifdef _WIN32
+#include <concurrent_queue.h>
+#else
+#include <tbb/concurrent_queue.h>
+#endif
+
 class CMat {
-   public:   
+   public:
     cv::Mat frame;
     int vchID;
     unsigned int frameCnt;
@@ -33,4 +38,4 @@ class CMat {
     }
 };
 
-typedef concurrency::concurrent_queue<CMat> CMats;  
+typedef concurrency::concurrent_queue<CMat> CMats;
