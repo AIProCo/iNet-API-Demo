@@ -87,7 +87,7 @@
 #define AIPRO_PATH "/home/aipro/jetson/"
 #endif
 
-#define ROOT_PATH AIPRO_PATH "data"
+#define ROOT_PATH AIPRO_PATH "data/"
 #define CONFIG_PATH ROOT_PATH "config"
 #define CHIMGS_PATH ROOT_PATH "chimgs"
 #define CNT_PATH ROOT_PATH "cnt"
