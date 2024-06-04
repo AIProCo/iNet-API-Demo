@@ -1376,17 +1376,17 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
 }
 
 void Logger::writeNowOD(ODRecord &odRcd, int vchID, string dayInfo, int sec) {
-    string filenameCnt = std::format("{}.txt", sec % 10);
-    string txtPathCnt = string(CNT_PATH) + "/" + dayInfo + "/" + to_string(vchID) + "/now/" + filenameCnt;
-    ofstream logFileCnt(txtPathCnt);
+    string filenameODNow = std::format("{}.txt", sec % 10);
+    string txtPathODNow = string(CNT_PATH) + "/" + dayInfo + "/" + to_string(vchID) + "/now/" + filenameODNow;
+    ofstream logFileODNow(txtPathODNow);
 
-    if (logFileCnt.is_open()) {
+    if (logFileODNow.is_open()) {
         for (int n = 0; n < odRcd.cntLines.size(); n++) {
             if (odRcd.cntLines[n].vchID != vchID)
                 continue;
 
             CntLine &c = odRcd.cntLines[n];
-            writeCntLine(logFileCnt, &c);
+            writeCntLine(logFileODNow, &c);
         }
 
         for (int n = 0; n < odRcd.zones.size(); n++) {
@@ -1394,10 +1394,10 @@ void Logger::writeNowOD(ODRecord &odRcd, int vchID, string dayInfo, int sec) {
                 continue;
 
             Zone &z = odRcd.zones[n];
-            writeZone(logFileCnt, &z);
+            writeZone(logFileODNow, &z);
         }
 
-        logFileCnt.close();
+        logFileODNow.close();
     }
 }
 

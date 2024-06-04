@@ -10,7 +10,7 @@
 #include <deque>
 
 #include <opencv2/core.hpp>
-#include <opencv2/imgproc.hpp >
+#include <opencv2/imgproc.hpp>
 
 /// System
 #define PERSON 0  /// person should be the first object in a mapping list

@@ -32,9 +32,9 @@ class CameraStreamer {
 
     bool stopFlag;
     int initSleepPeriod;
-    int sleepPeriod;
+    vector<int> sleepPeriods;
 
-    CMats cmats;
+    vector<CMats> cmatsAll;
     vector<VideoWriter> videoWriters;
 
     std::function<void(std::string)> lg;  // for writing log
@@ -62,14 +62,21 @@ class CameraStreamer {
     bool working(cv::VideoCapture *capture, int vchID);  // grab frame from ipcam stream
 
    public:
-    bool empty() {
-        return cmats.empty();
+    bool empty(int vchID) {
+        return cmatsAll[vchID].empty();
     }
-    bool try_pop(CMat &cmat) {
-        return cmats.try_pop(cmat);
+    bool try_pop(CMat &cmat, int vchID) {
+        return cmatsAll[vchID].try_pop(cmat);
     }
-    int unsafe_size() {
-        return cmats.unsafe_size();
+    int unsafe_size(int vchID) {
+        return cmatsAll[vchID].unsafe_size();
+    }
+    int unsafe_size_max() {
+        int maxSize = 0;
+        for (auto &cmats : cmatsAll)
+            maxSize = max(maxSize, (int)cmats.unsafe_size());
+
+        return maxSize;
     }
     VideoWriter &operator[](int idx) {
         return videoWriters[idx];

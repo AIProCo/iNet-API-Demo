@@ -1,6 +1,7 @@
 #include <string>
 
 #include "CameraStreamer.hpp"
+#include "util.h"
 #include "opencv2/opencv.hpp"
 
 CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
@@ -26,9 +27,10 @@ CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CC
     else
         initSleepPeriod = 180;  // for 5 fps
 
-    sleepPeriod = initSleepPeriod;
+    sleepPeriods.resize(numChannels, initSleepPeriod);
 
     videoWriters.resize(numChannels);
+    cmatsAll.resize(numChannels);
 
     for (int vchID = 0; vchID < numChannels; vchID++) {
         if (stopFlag)
@@ -180,11 +182,11 @@ void CameraStreamer::keepConnected(int vchID) {
                     return;
 
                 // Wait for 2 sec and try to reconnect (keep connected with real-time ip camera)
-                Sleep(2000);
+                universal_sleep(2000);
             }
         } else {
             std::cout << "[" << vchID << "] Can't connect: " << input << std::endl;
-            Sleep(5000);
+            universal_sleep(5000);
         }
     }
 };
@@ -228,6 +230,8 @@ bool CameraStreamer::working(cv::VideoCapture *capture, int vchID) {
     int retrieveEmptyCnt = 0;
 
     while (true) {
+        int &sleepPeriod = sleepPeriods[vchID];
+
         if (!capture->grab()) {
             grapFailCnt++;
             lg(std::format(" [{}]Grab Fail - Fail Count: {}\n", vchID, grapFailCnt));
@@ -244,6 +248,7 @@ bool CameraStreamer::working(cv::VideoCapture *capture, int vchID) {
                 if (retrieveEmptyCnt > 2)
                     return false;
             } else {
+                CMats &cmats = cmatsAll[vchID];
                 int curBufferSize = cmats.unsafe_size();
 
                 if (curBufferSize >= maxBufferSize / 2) {
@@ -267,7 +272,7 @@ bool CameraStreamer::working(cv::VideoCapture *capture, int vchID) {
         if (stopFlag)
             return false;
 
-        Sleep(sleepPeriod);
+        universal_sleep(sleepPeriod);
     }
     return true;
 }

@@ -11,8 +11,17 @@
 
 #include "global.h"
 
+#ifdef _WIN32
+#include <Windows.h>
+#else
+// for sleep
+#include <thread>
+#include <chrono>
+#endif
+
 using namespace std;
 using namespace cv;
+namespace fs = std::filesystem;
 
 const uchar colorTable[] = {
     169, 83,  255, 249, 249, 27,  127, 255, 212, 240, 255, 255, 245, 245, 220, 255, 228, 196, 255, 235, 205, 138,
@@ -37,6 +46,14 @@ std::ostream &operator<<(std::ostream &os, std::vector<T> vec) {
     std::copy(vec.begin(), vec.end(), std::ostream_iterator<T>(os, " "));
     os << "}";
     return os;
+}
+/// @brief  A utility function to simulate sleep function
+inline void universal_sleep(long long ms) {
+#ifdef _WIN32
+    Sleep(ms);
+#else
+    std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+#endif
 }
 
 /// @brief an utility class to visualize the results
@@ -133,6 +150,40 @@ class Vis {
 
         /// draw bboxes
         rectangle(matImg, topLeftBox, rightBottom, boxColor, thickness + 1);
+
+        /// draw text
+        drawTexts(matImg, topLeftBox, texts, textColor, fontFace, fontScale, thickness, vSpace, hSpace);
+    }
+
+    /// e.g: show tracking information, gender counting
+    static void drawTextBlock2(Mat &matImg, Point topLeftBox, vector<string> texts, double fontScale = 0.2f,
+                               int thickness = 1, Scalar boxColor = Scalar(45, 45, 255),
+                               Scalar textColor = Scalar(255, 255, 255), int fontFace = FONT_HERSHEY_SIMPLEX,
+                               int vSpace = 10, int hSpace = 10) {
+        Size txtSize = getBoxForTexts(texts, fontFace, fontScale, thickness, vSpace, hSpace);
+        Point rightBottom = Point(topLeftBox.x + txtSize.width, topLeftBox.y + txtSize.height);
+
+        if (txtSize.width >= matImg.cols || txtSize.height >= matImg.rows)
+            return;
+
+        if (rightBottom.x > matImg.cols) {
+            int shiftX = rightBottom.x - matImg.cols;
+            topLeftBox.x -= shiftX;
+            rightBottom.x -= shiftX;
+        }
+
+        if (rightBottom.y > matImg.rows) {
+            int shiftY = rightBottom.y - matImg.rows;
+            topLeftBox.y -= shiftY;
+            rightBottom.y -= shiftY;
+        }
+
+        /// draw canvas
+        Mat textRegion = matImg(Rect(topLeftBox, rightBottom));
+        textRegion -= Scalar(150, 150, 150);
+
+        /// draw bboxes
+        rectangle(matImg, topLeftBox, rightBottom, boxColor, 0);
 
         /// draw text
         drawTexts(matImg, topLeftBox, texts, textColor, fontFace, fontScale, thickness, vSpace, hSpace);

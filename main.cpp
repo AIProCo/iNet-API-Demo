@@ -38,7 +38,12 @@
 #define DRAW_CC_COUNTING true
 
 #define INPUT_DIRECTORY "inputs/"
+#ifdef _WIN32
 #define CFG_FILEPATH INPUT_DIRECTORY "config.json"
+#else
+#define CFG_FILEPATH INPUT_DIRECTORY "config_jetson.json"
+#endif
+
 #define CC_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.net"
 #define CC_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.nez"
 #define OD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4.net"
@@ -54,6 +59,7 @@ using namespace std::filesystem;
 using namespace std::chrono;
 
 using json = nlohmann::json;
+namespace fs = std::filesystem;  // for getAbsolutePath
 
 bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
 bool setODRecord(ODRecord &odRcd, vector<vector<int>> &cntLineParams, vector<vector<int>> &zoneParams);
@@ -71,6 +77,20 @@ void doRunModelCC(Mat &density, Mat &frame, int vchID);
 
 std::atomic<bool> ccTreadDone = false;
 std::atomic<bool> fdTreadDone = false;
+
+// normalize model path depending on the OS
+std::string normPath(const std::string &relativePath) {
+#ifdef _WIN32
+    return relativePath;
+#else
+    fs::path currentfilePath = __FILE__;
+    fs::path combinedPath = currentfilePath.parent_path() / relativePath;
+    fs::path absolutePath = fs::absolute(combinedPath);
+    // why fs::canonical: see
+    // https://stackoverflow.com/questions/62728674/get-the-absolute-path-from-stdfilesystempath-c
+    return fs::canonical(absolutePath).string();
+#endif
+}
 
 int main() {
     Config cfg;
@@ -112,13 +132,13 @@ int main() {
     Logger logger(cfg, odRcd, fdRcd, ccRcd);
     CameraStreamer streamer(cfg, odRcd, fdRcd, ccRcd);
 
-    unsigned int frameCnt = 0;                 // should be unsigned int
+    unsigned int frameCnt;
     unsigned int frameLimit = cfg.frameLimit;  // number of frames to be processed
-    int vchID = 0, vchIDFD, vchIDCC;
+    int vchIDFD, vchIDCC;
     int odBatchSize = cfg.odBatchSize;  // batch size of object detection
 
-    clock_t start, end;
-    vector<float> infs0, infs1;
+    chrono::steady_clock::time_point start, end;
+    vector<int> infs;
     int sleepPeriodMain = 0;
     vector<unsigned int> threadStartFDs(cfg.numChannels, 0);
     vector<unsigned int> threadStartCCs(cfg.numChannels, 0);
@@ -134,16 +154,17 @@ int main() {
     Mat frameCC;
 #endif
 
+    int tVchID = 0;
     while (1) {
         if (sleepPeriodMain > 0)
-            this_thread::sleep_for(std::chrono::milliseconds(sleepPeriodMain));
+            this_thread::sleep_for(chrono::milliseconds(sleepPeriodMain));
 
-        if (!streamer.empty()) {
+        if (!streamer.empty(tVchID)) {
             CMat cframe;
-            streamer.try_pop(cframe);
+            streamer.try_pop(cframe, tVchID);
 
             Mat frame = cframe.frame;
-            vchID = cframe.vchID;  // fix odBatchSize to 1
+            int vchID = cframe.vchID;  // fix odBatchSize to 1
             frameCnt = cframe.frameCnt;
 
             if (!logger.checkCmd(cfg, odRcd, fdRcd, ccRcd)) {
@@ -154,7 +175,7 @@ int main() {
             system_clock::time_point now = system_clock::now();
             int ccNumFrame = 0;
 
-            start = clock();
+            start = std::chrono::steady_clock::now();
 
             if (cfg.fdChannels[vchID]) {
                 unsigned int &threadStartFD = threadStartFDs[vchID];
@@ -174,7 +195,7 @@ int main() {
                     else
                         periodChanged = false;
 
-                    // periodChanged = true;
+                    periodChanged = false;
                     if (periodChanged)
                         lg(std::format("  [{}]Frame {}: FD thread Gap = {}({} - {}), period = {}\n", vchID, frameCnt,
                                        threadGap, frameCnt, threadStartFD, fdPeriod));
@@ -212,7 +233,7 @@ int main() {
                     else
                         periodChanged = false;
 
-                    // periodChanged = true;
+                    periodChanged = false;
                     if (periodChanged)
                         lg(std::format("  [{}]Frame {}: CC thread Gap = {}({} - {}), period = {}\n", vchID, frameCnt,
                                        threadGap, frameCnt, threadStartCC, ccPeriod));
@@ -256,25 +277,30 @@ int main() {
                     drawCC(cfg, ccRcd, densityChPre[vchID], frame, vchID);
             }
 
-            end = clock();
+            end = chrono::steady_clock::now();
 
             if (cfg.recording)
-                (streamer[vchID]) << frame;  // write a frame
+                (streamer[vchID]) << frame;  // write a frame+
 
             logger.writeData(cfg, odRcd, fdRcd, ccRcd, frame, frameCnt, vchID, now);
 
-            float inf0 = (end - start) / odBatchSize;
+            int inf = chrono::duration_cast<chrono::milliseconds>(end - start).count();
 
             if (frameCnt % 20 == 0)
                 lg(std::format("[{}]Frame{:>4}>  SP({:>2}, {:>3}), Gap(FD: {}, CC: {}),  Buf: {},  Inf: {}ms\n", vchID,
-                               frameCnt, sleepPeriodMain, streamer.sleepPeriod, fdPeriod, ccPeriod,
-                               streamer.unsafe_size(), inf0));
+                               frameCnt, sleepPeriodMain, streamer.sleepPeriods[vchID], fdPeriod, ccPeriod,
+                               streamer.unsafe_size(vchID), inf));
 
             if (frameCnt > 10 && frameCnt < 500)  // skip the start frames and limit the number of elements
-                infs0.push_back(inf0);
+                infs.push_back(inf);
+        }
 
-            if (streamer.unsafe_size() > 0)
-                sleepPeriodMain = 0;
+        tVchID++;
+        if (tVchID >= cfg.numChannels)
+            tVchID = 0;
+
+        if (streamer.unsafe_size_max() > 0) {
+            sleepPeriodMain = 0;
         } else {
             if (sleepPeriodMain < 10)
                 sleepPeriodMain += 2;
@@ -295,9 +321,9 @@ int main() {
     destroyModel();      // destroy all models
     streamer.destory();  // destroy streamer
 
-    if (infs0.size() > 1) {
-        float avgInf0 = accumulate(infs0.begin(), infs0.end(), 0) / infs0.size();
-        lg(std::format("\nAverage Inference Time: {}ms\n", avgInf0));
+    if (infs.size() > 1) {
+        float avgInf = accumulate(infs.begin(), infs.end(), 0) / infs.size();
+        lg(std::format("\nAverage Inference Time: {}ms\n", avgInf));
     }
 
     if (cfg.recording) {
@@ -633,7 +659,8 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
 }
 
 bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
-    string jsonCfgFile = CFG_FILEPATH;
+    string jsonCfgFile = normPath(CFG_FILEPATH);
+    // std::cout<<"cfg file:"<<jsonCfgFile<<std::endl;
     std::ifstream cfgFile(jsonCfgFile);
     json js;
     cfgFile >> js;
@@ -682,8 +709,18 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
             cfg.outputFiles.resize(cfg.numChannels);
     } else {
         // read the list of filepaths
-        cfg.inputFiles = js["global"]["input_files"].get<vector<string>>();
-        cfg.outputFiles = js["global"]["output_files"].get<vector<string>>();
+        vector<string> tempInputFiles = js["global"]["input_files"].get<vector<string>>();
+        vector<string> tempOutputFiles = js["global"]["output_files"].get<vector<string>>();
+
+#ifndef _WIN32  // for linux
+        for (int i = 0; i < tempInputFiles.size(); i++) {
+            tempInputFiles[i] = normPath(tempInputFiles[i]);
+            tempOutputFiles[i] = normPath(tempOutputFiles[i]);
+        }
+#endif
+
+        cfg.inputFiles = tempInputFiles;
+        cfg.outputFiles = tempOutputFiles;
 
         if (cfg.inputFiles.size() != cfg.outputFiles.size()) {
             cout << "input_files and output_files should be the same size!!";
@@ -717,7 +754,7 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
         }
     }
 
-    cfg.maxBufferSize = cfg.numChannels * 4;
+    cfg.maxBufferSize = 4;  // for each channnel
     cfg.vchStates.resize(cfg.numChannels, 0);
     cfg.frameWidths.resize(cfg.numChannels, 0);
     cfg.frameHeights.resize(cfg.numChannels, 0);
@@ -776,18 +813,18 @@ bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccR
 #ifndef _CPU_INFER
     cfg.lg("Do inference using GPU\n");
 
-    cfg.odModelFile = OD_MD_GPU_FILEPATH;
-    cfg.fdModelFile = FD_MD_GPU_FILEPATH;
-    cfg.parModelFile = PAR_MD_GPU_FILEPATH;
-    cfg.ccModelFile = CC_MD_GPU_FILEPATH;
+    cfg.odModelFile = normPath(OD_MD_GPU_FILEPATH);
+    cfg.fdModelFile = normPath(FD_MD_GPU_FILEPATH);
+    cfg.parModelFile = normPath(PAR_MD_GPU_FILEPATH);
+    cfg.ccModelFile = normPath(CC_MD_GPU_FILEPATH);
     cfg.parLightMode = true;
 #else
     cfg.lg("Do inference using CPU\n");
 
-    cfg.odModelFile = OD_MD_CPU_FILEPATH;
-    cfg.fdModelFile = FD_MD_CPU_FILEPATH;
-    cfg.parModelFile = PAR_MD_CPU_FILEPATH;
-    cfg.ccModelFile = CC_MD_CPU_FILEPATH;
+    cfg.odModelFile = normPath(OD_MD_CPU_FILEPATH);
+    cfg.fdModelFile = normPath(FD_MD_CPU_FILEPATH);
+    cfg.parModelFile = normPath(PAR_MD_CPU_FILEPATH);
+    cfg.ccModelFile = normPath(CC_MD_CPU_FILEPATH);
     cfg.parLightMode = true;
 #endif
     cfg.lg(std::format("\nModel Configure:\n  -OD & Tracking: {}\n  -FD: {}\n  -PAR: {}\n  -CC: {}\n\n", cfg.odEnable,
