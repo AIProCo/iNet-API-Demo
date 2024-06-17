@@ -12,6 +12,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <filesystem>
 #endif
 
 #include <opencv2/core/core.hpp>
@@ -21,11 +23,7 @@
 #include "generator.h"
 
 // util
-#include "json.hpp"
 #include "util.h"
-
-#include "logger.h"
-#include "CameraStreamer.hpp"
 
 #define DRAW_DETECTION_INFO false
 #define DRAW_FIRE_DETECTION true
@@ -37,36 +35,11 @@
 #define DRAW_CC true
 #define DRAW_CC_COUNTING true
 
-#define INPUT_DIRECTORY "inputs/"
-#ifdef _WIN32
-#define CFG_FILEPATH INPUT_DIRECTORY "config.json"
-#else
-#define CFG_FILEPATH INPUT_DIRECTORY "config_jetson.json"
-#endif
-
-#define CC_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.net"
-#define CC_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.nez"
-#define OD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4.net"
-#define OD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4.nez"
-#define FD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_3.net"
-#define FD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_3.nez"
-#define PAR_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_par_1_4.net"
-#define PAR_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_par_1_4.nez"
-
 using namespace std;
 using namespace cv;
 using namespace std::filesystem;
 using namespace std::chrono;
 
-using json = nlohmann::json;
-namespace fs = std::filesystem;  // for getAbsolutePath
-
-bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
-bool setODRecord(ODRecord &odRcd, vector<vector<int>> &cntLineParams, vector<vector<int>> &zoneParams);
-bool setCCRecord(Config &cfg, CCRecord &ccRcd, vector<vector<int>> &ccZoneParams);
-bool setFDRecord(Config &cfg, FDRecord &fdRcd);
-void loadIS(Config &cfg, string txtPathInit, vector<vector<int>> &cntLineParams, vector<vector<int>> &zoneParams,
-            vector<vector<int>> &ccZoneParams);
 void drawZones(Config &cfg, ODRecord &odRcd, Mat &img, int vchID, double alpha);
 void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha = 0.7);
 void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh);
@@ -78,28 +51,17 @@ void doRunModelCC(Mat &density, Mat &frame, int vchID);
 std::atomic<bool> ccTreadDone = false;
 std::atomic<bool> fdTreadDone = false;
 
-// normalize model path depending on the OS
-std::string normPath(const std::string &relativePath) {
-#ifdef _WIN32
-    return relativePath;
-#else
-    fs::path currentfilePath = __FILE__;
-    fs::path combinedPath = currentfilePath.parent_path() / relativePath;
-    fs::path absolutePath = fs::absolute(combinedPath);
-    // why fs::canonical: see
-    // https://stackoverflow.com/questions/62728674/get-the-absolute-path-from-stdfilesystempath-c
-    return fs::canonical(absolutePath).string();
-#endif
-}
-
 int main() {
     Config cfg;
     ODRecord odRcd;
     FDRecord fdRcd;
     CCRecord ccRcd;
 
-    if (!parseConfigAPI(cfg, odRcd, fdRcd, ccRcd)) {
-        cfg.lg("parseConfigAPI: Parsing Error!\n");
+    setWriteLogger(cfg);  // set cfg.lg. This should be called before parseConfigAPI()
+    std::function<void(std::string)> lg = cfg.lg;
+
+    if (!parseConfigAPI(cfg, odRcd, fdRcd, ccRcd)) {  // parse config.json, cam.json, and is.txt
+        lg("parseConfigAPI: Parsing Error!\n");
         return -1;
     }
 
@@ -113,29 +75,24 @@ int main() {
     }
 
     int fdMinPeriod, ccMinPeriod;
-    if (cfg.boostMode) {
-        fdMinPeriod = 1;
-        ccMinPeriod = 1;
+    if (cfg.boostMode) {  // cfg.boostMode
+        fdMinPeriod = 1, ccMinPeriod = 1;
     } else {
-        fdMinPeriod = 10;
-        ccMinPeriod = 17;
+        fdMinPeriod = 10, ccMinPeriod = 17;
     }
     int fdPeriod = fdMinPeriod, ccPeriod = ccMinPeriod;
-
-    std::function<void(std::string)> lg = cfg.lg;
 
     if (!initModel(cfg, odRcd, fdRcd, ccRcd)) {
         lg("initModel: Initialization of the solution failed!\n");
         return -1;
     }
 
-    Logger logger(cfg, odRcd, fdRcd, ccRcd);
-    CameraStreamer streamer(cfg, odRcd, fdRcd, ccRcd);
+    initLogger(cfg, odRcd, fdRcd, ccRcd);
+    initStreamer(cfg, odRcd, fdRcd, ccRcd);
 
-    unsigned int frameCnt;
+    unsigned int frameCnt = 0;
     unsigned int frameLimit = cfg.frameLimit;  // number of frames to be processed
-    int vchIDFD, vchIDCC;
-    int odBatchSize = cfg.odBatchSize;  // batch size of object detection
+    int vchIDFD = -1, vchIDCC = -1;
 
     chrono::steady_clock::time_point start, end;
     vector<int> infs;
@@ -159,16 +116,16 @@ int main() {
         if (sleepPeriodMain > 0)
             this_thread::sleep_for(chrono::milliseconds(sleepPeriodMain));
 
-        if (!streamer.empty(tVchID)) {
+        if (!isEmptyStreamer(tVchID)) {
             CMat cframe;
-            streamer.try_pop(cframe, tVchID);
+            tryPopStreamer(cframe, tVchID);  // get a new cframe
 
-            Mat frame = cframe.frame;
-            int vchID = cframe.vchID;  // fix odBatchSize to 1
+            Mat frame = cframe.frame;  // fix odBatchSize to 1
+            int vchID = cframe.vchID;
             frameCnt = cframe.frameCnt;
 
-            if (!logger.checkCmd(cfg, odRcd, fdRcd, ccRcd)) {
-                lg("Break loop by logger.checkCmd\n");
+            if (!checkCmdLogger(cfg, odRcd, fdRcd, ccRcd)) {
+                lg("Break loop by checkCmdLogger\n");
                 break;
             }
 
@@ -183,7 +140,7 @@ int main() {
                 if (fdTh != NULL && fdTreadDone && vchID == vchIDFD) {
                     fdTreadDone = false;
 
-                    fdTh->join();  // needed??
+                    fdTh->join();
                     fdTh = NULL;
 
                     bool periodChanged = true;
@@ -195,17 +152,10 @@ int main() {
                     else
                         periodChanged = false;
 
-                    periodChanged = false;
-                    if (periodChanged)
-                        lg(std::format("  [{}]Frame {}: FD thread Gap = {}({} - {}), period = {}\n", vchID, frameCnt,
-                                       threadGap, frameCnt, threadStartFD, fdPeriod));
-
                     threadStartFD = frameCnt;  // for the following if-statement
                 }
 
                 if (threadStartFD + fdPeriod < frameCnt && fdTh == NULL) {
-                    // lg(std::format("[{}]FD thread Start frameCnt={} > threadStartFD={} + fdPeriod={}\n", vchID,
-                    // frameCnt, threadStartFD, fdPeriod));
                     resize(frame, frameFD, Size(cfg.fdNetWidth, cfg.fdNetHeight));
                     threadStartFD = frameCnt;
                     vchIDFD = vchID;
@@ -219,7 +169,7 @@ int main() {
                 if (ccTh != NULL && ccTreadDone && vchID == vchIDCC) {
                     ccTreadDone = false;
 
-                    ccTh->join();  // needed??
+                    ccTh->join();
                     ccTh = NULL;
 
                     densityChPre[vchIDCC] = density;
@@ -233,17 +183,10 @@ int main() {
                     else
                         periodChanged = false;
 
-                    periodChanged = false;
-                    if (periodChanged)
-                        lg(std::format("  [{}]Frame {}: CC thread Gap = {}({} - {}), period = {}\n", vchID, frameCnt,
-                                       threadGap, frameCnt, threadStartCC, ccPeriod));
-
                     threadStartCC = frameCnt;  // for the following if-statement
                 }
 
                 if (threadStartCC + ccPeriod < frameCnt && ccTh == NULL) {
-                    // lg(std::format("  [{}]CC thread Start frameCnt={} > threadStartCC={} + ccPeriod={}\n", vchID,
-                    // frameCnt, threadStartCC, ccPeriod));
                     threadStartCC = frameCnt;
                     vchIDCC = vchID;
 #ifndef _CPU_INFER
@@ -265,7 +208,7 @@ int main() {
             if (cfg.odChannels[vchID])
                 runModel(dboxes, frame, vchID, frameCnt, cfg.odScoreTh);
 
-            bool needToDraw = logger.needToDraw(vchID);
+            bool needToDraw = needToDrawLogger(vchID);
             if (needToDraw || cfg.recording) {
                 if (cfg.odChannels[vchID])
                     drawBoxes(cfg, odRcd, frame, dboxes, vchID);
@@ -280,18 +223,18 @@ int main() {
             end = chrono::steady_clock::now();
 
             if (cfg.recording)
-                (streamer[vchID]) << frame;  // write a frame+
+                writeStreamer(frame, vchID);  // write a frame to the output video
 
-            logger.writeData(cfg, odRcd, fdRcd, ccRcd, frame, frameCnt, vchID, now);
+            writeDataLogger(cfg, odRcd, fdRcd, ccRcd, frame, frameCnt, vchID, now);
 
             int inf = chrono::duration_cast<chrono::milliseconds>(end - start).count();
 
             if (frameCnt % 20 == 0)
                 lg(std::format("[{}]Frame{:>4}>  SP({:>2}, {:>3}), Gap(FD: {}, CC: {}),  Buf: {},  Inf: {}ms\n", vchID,
-                               frameCnt, sleepPeriodMain, streamer.sleepPeriods[vchID], fdPeriod, ccPeriod,
-                               streamer.unsafe_size(vchID), inf));
+                               frameCnt, sleepPeriodMain, getPeriodStreamer(vchID), fdPeriod, ccPeriod,
+                               getUnsafeSizeStreamer(vchID), inf));
 
-            if (frameCnt > 10 && frameCnt < 500)  // skip the start frames and limit the number of elements
+            if (frameCnt > 10 && frameCnt < 100)  // skip the start frames and limit the number of elements
                 infs.push_back(inf);
         }
 
@@ -299,7 +242,7 @@ int main() {
         if (tVchID >= cfg.numChannels)
             tVchID = 0;
 
-        if (streamer.unsafe_size_max() > 0) {
+        if (getUnsafeSizeMaxStreamer() > 0) {
             sleepPeriodMain = 0;
         } else {
             if (sleepPeriodMain < 10)
@@ -318,8 +261,9 @@ int main() {
     if (ccTh)
         ccTh->join();
 
-    destroyModel();      // destroy all models
-    streamer.destory();  // destroy streamer
+    destroyModel();     // destroy all models
+    destroyLogger();    // destroy logger
+    destroyStreamer();  // destroy streamer
 
     if (infs.size() > 1) {
         float avgInf = accumulate(infs.begin(), infs.end(), 0) / infs.size();
@@ -335,16 +279,6 @@ int main() {
     lg("\nTerminate program!\n");
 
     return 0;
-}
-
-void doRunModelFD(Mat &frame, int vchID, uint frameCnt) {
-    runModelFD(frame, vchID, frameCnt);
-    fdTreadDone = true;
-}
-
-void doRunModelCC(Mat &density, Mat &frame, int vchID) {
-    runModelCC(density, frame, vchID);
-    ccTreadDone = true;
 }
 
 void drawZones(Config &cfg, ODRecord &odRcd, Mat &img, int vchID, double alpha) {
@@ -604,7 +538,7 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
                 merge(chans, img);
             }
 
-            float alpha = 0.7;
+            float alpha = 0.7f;
             int np[1] = {4};
             cv::Mat layer;
 
@@ -658,429 +592,12 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
     }
 }
 
-bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
-    string jsonCfgFile = normPath(CFG_FILEPATH);
-    // std::cout<<"cfg file:"<<jsonCfgFile<<std::endl;
-    std::ifstream cfgFile(jsonCfgFile);
-    json js;
-    cfgFile >> js;
-
-    // logger
-    cfg.lg = Logger::writeLog;
-    cfg.lg("Start parsing config....\n");
-
-    // apikey, gpu_id
-    cfg.frameLimit = js["global"]["frame_limit"];
-    cfg.key = js["global"]["apikey"];
-    cfg.recording = js["global"]["recording"];
-    cfg.debugMode = js["global"]["debug_mode"];
-    cfg.boostMode = js["global"]["boost_mode"];
-    cfg.igpuEnable = js["global"]["igpu_enable"];
-    cfg.logEnable = true;  // fixed
-
-    int parsingMode = js["global"]["parsing_mode"];
-
-    string filenameCam = "cam.json";
-    string jsonPathCam = string(CONFIG_PATH) + "/" + filenameCam;
-
-    if ((parsingMode == 1 || parsingMode == 3) && std::filesystem::exists(jsonPathCam)) {
-        std::ifstream fileCam(jsonPathCam);
-        json jsCam;
-        fileCam >> jsCam;
-
-        cfg.numChannels = jsCam["num_channels"];
-
-        for (int ch = 0; ch < cfg.numChannels; ch++) {
-            string c = to_string(ch);
-            cfg.inputFiles.push_back(jsCam[c]["all"]);
-            cfg.odChannels.push_back(jsCam[c]["od_enable"]);
-            cfg.fdChannels.push_back(jsCam[c]["fd_enable"]);
-            cfg.ccChannels.push_back(jsCam[c]["cc_enable"]);
-        }
-
-        if (cfg.recording) {
-            for (int ch = 0; ch < cfg.numChannels; ch++) {
-                string filepath = string(VIDEO_OUT_PATH) + "/out" + to_string(ch) + ".mp4";
-                cfg.outputFiles.push_back(filepath);
-            }
-        }
-
-        if (cfg.outputFiles.size() > cfg.numChannels)
-            cfg.outputFiles.resize(cfg.numChannels);
-    } else {
-        // read the list of filepaths
-        vector<string> tempInputFiles = js["global"]["input_files"].get<vector<string>>();
-        vector<string> tempOutputFiles = js["global"]["output_files"].get<vector<string>>();
-
-#ifndef _WIN32  // for linux
-        for (int i = 0; i < tempInputFiles.size(); i++) {
-            tempInputFiles[i] = normPath(tempInputFiles[i]);
-            tempOutputFiles[i] = normPath(tempOutputFiles[i]);
-        }
-#endif
-
-        cfg.inputFiles = tempInputFiles;
-        cfg.outputFiles = tempOutputFiles;
-
-        if (cfg.inputFiles.size() != cfg.outputFiles.size()) {
-            cout << "input_files and output_files should be the same size!!";
-            return false;
-        }
-
-        cfg.numChannels = cfg.inputFiles.size();
-        cfg.odChannels = js["global"]["od_channels"].get<vector<bool>>();
-        cfg.fdChannels = js["global"]["fd_channels"].get<vector<bool>>();
-        cfg.ccChannels = js["global"]["cc_channels"].get<vector<bool>>();
-
-        if (cfg.odChannels.size() < cfg.numChannels) {
-            for (int i = cfg.odChannels.size(); i < cfg.numChannels; i++)
-                cfg.odChannels.push_back(false);
-        } else if (cfg.odChannels.size() > cfg.numChannels) {
-            cfg.odChannels.resize(cfg.numChannels);
-        }
-
-        if (cfg.fdChannels.size() < cfg.numChannels) {
-            for (int i = cfg.fdChannels.size(); i < cfg.numChannels; i++)
-                cfg.fdChannels.push_back(false);
-        } else if (cfg.fdChannels.size() > cfg.numChannels) {
-            cfg.fdChannels.resize(cfg.numChannels);
-        }
-
-        if (cfg.ccChannels.size() < cfg.numChannels) {
-            for (int i = cfg.ccChannels.size(); i < cfg.numChannels; i++)
-                cfg.ccChannels.push_back(false);
-        } else if (cfg.ccChannels.size() > cfg.numChannels) {
-            cfg.ccChannels.resize(cfg.numChannels);
-        }
-    }
-
-    cfg.maxBufferSize = 4;  // for each channnel
-    cfg.vchStates.resize(cfg.numChannels, 0);
-    cfg.frameWidths.resize(cfg.numChannels, 0);
-    cfg.frameHeights.resize(cfg.numChannels, 0);
-    cfg.fpss.resize(cfg.numChannels, 0);
-
-    // od config
-    cfg.odEnable = js["od"]["enable"];
-    cfg.odNetWidth = NET_WIDTH_OD;    // fixed
-    cfg.odNetHeight = NET_HEIGHT_OD;  // fixed
-    cfg.odScaleFactors.resize(cfg.numChannels, 0);
-    cfg.odScaleFactorsInv.resize(cfg.numChannels, 0);
-    cfg.odBatchSize = 1;  // fixed
-    cfg.odScoreTh = js["od"]["score_th"];
-    cfg.odIDMapping = {"person"};
-    // cfg.odIDMapping = {"person", "bycle", "car", "motorcycle", "airplane", "bus", "train", "truck"};
-    cfg.numClasses = cfg.odIDMapping.size();
-
-    // fd config
-    cfg.fdEnable = js["fd"]["enable"];
-    cfg.fdNetWidth = NET_WIDTH_FD;    // fixed
-    cfg.fdNetHeight = NET_HEIGHT_FD;  // fixed
-    cfg.fdScaleFactors.resize(cfg.numChannels, 0);
-    cfg.fdScaleFactorsInv.resize(cfg.numChannels, 0);
-    cfg.fdBatchSize = 1;  // fixed(but support from 1 to 4)
-    cfg.fdScoreTh = js["fd"]["score_th"];
-    cfg.fdIDMapping = {"both", "fire", "none", "smoke"};  // fixed (should be the same as fd modes in global.h)
-    // cfg.fdIDMapping = {"smoke", "fire"};  // fixed
-    cfg.fdNumClasses = NUM_FD_CLASSES;
-    cfg.fdWindowSize = 32;
-    cfg.fdPeriod = 16;  // check period in the idle mode
-
-    // cc config
-    cfg.ccEnable = js["cc"]["enable"];
-    cfg.ccNetWidth = NET_WIDTH_CC;    // fixed
-    cfg.ccNetHeight = NET_HEIGHT_CC;  // fixed
-    cfg.ccScaleFactors.resize(cfg.numChannels, 0);
-    cfg.ccScaleFactorsInv.resize(cfg.numChannels, 0);
-    cfg.ccWindowSize = 32;
-    cfg.ccPeriod = 16;  // check period in the idle mode
-
-    // tracking
-    cfg.longLastingObjTh = 300;
-    cfg.noMoveTh = 3.0f;
-    cfg.lineEmphasizePeroid = 15;
-
-    // par config
-    cfg.parEnable = js["par"]["enable"];
-    cfg.parBatchSize = 1;  // fixed
-    cfg.parIDMapping = {"gender", "child", "adult", "elder"};
-    cfg.numAtts = NUM_ATTRIBUTES;
-    cfg.attUpdatePeriod = 15;
-
-    // counting
-    cfg.debouncingTh = 20;
-
-#ifndef _CPU_INFER
-    cfg.lg("Do inference using GPU\n");
-
-    cfg.odModelFile = normPath(OD_MD_GPU_FILEPATH);
-    cfg.fdModelFile = normPath(FD_MD_GPU_FILEPATH);
-    cfg.parModelFile = normPath(PAR_MD_GPU_FILEPATH);
-    cfg.ccModelFile = normPath(CC_MD_GPU_FILEPATH);
-    cfg.parLightMode = true;
-#else
-    cfg.lg("Do inference using CPU\n");
-
-    cfg.odModelFile = normPath(OD_MD_CPU_FILEPATH);
-    cfg.fdModelFile = normPath(FD_MD_CPU_FILEPATH);
-    cfg.parModelFile = normPath(PAR_MD_CPU_FILEPATH);
-    cfg.ccModelFile = normPath(CC_MD_CPU_FILEPATH);
-    cfg.parLightMode = true;
-#endif
-    cfg.lg(std::format("\nModel Configure:\n  -OD & Tracking: {}\n  -FD: {}\n  -PAR: {}\n  -CC: {}\n\n", cfg.odEnable,
-                       cfg.fdEnable, cfg.parEnable, cfg.ccEnable));
-
-    if (cfg.parLightMode)
-        cfg.lineEmphasizePeroid = min(cfg.lineEmphasizePeroid, cfg.attUpdatePeriod);
-
-    // Enforce channel characteristics based on whether each model is enabled or not
-    for (int ch = 0; ch < cfg.numChannels; ch++) {
-        if (!cfg.odEnable)
-            cfg.odChannels[ch] = false;
-
-        if (!cfg.fdEnable)
-            cfg.fdChannels[ch] = false;
-
-        if (!cfg.ccEnable)
-            cfg.ccChannels[ch] = false;
-    }
-
-    vector<vector<int>> cntLineParams, zoneParams, ccZoneParams;
-    string filenameInit = "is.txt";
-    string txtPathInit = string(CONFIG_PATH) + "/" + filenameInit;
-
-    if ((parsingMode == 2 || parsingMode == 3) && std::filesystem::exists(txtPathInit)) {
-        cfg.lg("load is.txt for IS\n");
-        loadIS(cfg, txtPathInit, cntLineParams, zoneParams, ccZoneParams);
-    } else {
-        cfg.lg("load config.json for IS\n");
-        // cntline
-        cntLineParams = js["line"]["param"].get<vector<vector<int>>>();
-
-        // zones
-        zoneParams = js["zone"]["param"].get<vector<vector<int>>>();
-
-        // Crowd counting
-        ccZoneParams = js["cc_zone"]["param"].get<vector<vector<int>>>();
-    }
-
-    if (!setODRecord(odRcd, cntLineParams, zoneParams)) {
-        cfg.lg("setODRecord Error!\n");
-        return false;
-    }
-
-    if (!setCCRecord(cfg, ccRcd, ccZoneParams)) {
-        cfg.lg("setCCRecord Error!\n");
-        return false;
-    }
-
-    if (!setFDRecord(cfg, fdRcd)) {
-        cfg.lg("setFDRecord Error!\n");
-        return false;
-    }
-
-    cfg.lg("End parsing config....\n\n");
-    return true;
+void doRunModelFD(Mat &frame, int vchID, uint frameCnt) {
+    runModelFD(frame, vchID, frameCnt);
+    fdTreadDone = true;
 }
 
-bool setFDRecord(Config &cfg, FDRecord &fdRcd) {
-    if (cfg.fdEnable) {
-        fdRcd.fireProbsMul.resize(cfg.numChannels);
-        fdRcd.smokeProbsMul.resize(cfg.numChannels);
-
-        for (int i = 0; i < cfg.numChannels; i++) {
-            fdRcd.fireProbsMul[i].resize(cfg.fdWindowSize, 0.0f);
-            fdRcd.smokeProbsMul[i].resize(cfg.fdWindowSize, 0.0f);
-        }
-
-        fdRcd.fireEvents.resize(cfg.numChannels, 0);
-        fdRcd.smokeEvents.resize(cfg.numChannels, 0);
-        fdRcd.afterFireEvents.resize(cfg.numChannels, 0);
-    }
-
-    return true;
-}
-
-bool setODRecord(ODRecord &odRcd, vector<vector<int>> &cntLineParams, vector<vector<int>> &zoneParams) {
-    odRcd.cntLines.clear();
-    odRcd.zones.clear();
-
-    for (auto &cntLineParam : cntLineParams) {
-        CntLine cntLine;
-
-        cntLine.enabled = true;
-        cntLine.preTotal = 0;
-        cntLine.clineID = cntLineParam[0];
-        cntLine.vchID = cntLineParam[1];
-        cntLine.isMode = cntLineParam[2];
-        cntLine.pts[0].x = cntLineParam[3];
-        cntLine.pts[0].y = cntLineParam[4];
-        cntLine.pts[1].x = cntLineParam[5];
-        cntLine.pts[1].y = cntLineParam[6];
-
-        if (abs(cntLine.pts[0].x - cntLine.pts[1].x) > abs(cntLine.pts[0].y - cntLine.pts[1].y))
-            cntLine.direction = 0;  // horizontal line -> use delta y and count U and D
-        else
-            cntLine.direction = 1;  // vertical line -> use delta x and count L and R
-
-        for (int g = 0; g < NUM_GENDERS; g++) {         // number of genders
-            for (int a = 0; a < NUM_AGE_GROUPS; a++) {  // number of age groups
-                cntLine.totalUL[g][a] = 0;
-                cntLine.totalDR[g][a] = 0;
-            }
-        }
-
-        odRcd.cntLines.push_back(cntLine);
-    }
-
-    if (zoneParams.size() > 100) {
-        cout << "The number of zones should not exceed 100.\n";
-        return false;
-    }
-
-    for (auto &zoneParam : zoneParams) {
-        Zone zone;
-
-        zone.enabled = true;
-        zone.preTotal = 0;
-        zone.zoneID = zoneParam[0];
-        zone.vchID = zoneParam[1];
-        zone.isMode = zoneParam[2];
-
-        for (int i = 0; i < 4; i++) {
-            Point pt;
-            pt.x = zoneParam[2 * i + 3];
-            pt.y = zoneParam[2 * i + 4];
-            zone.pts.push_back(pt);
-        }
-
-        for (int g = 0; g < NUM_GENDERS; g++) {         // number of genders
-            for (int a = 0; a < NUM_AGE_GROUPS; a++) {  // number of age groups
-                zone.curPeople[g][a] = 0;
-                zone.hitMap[g][a] = 0;
-            }
-        }
-
-        odRcd.zones.push_back(zone);
-    }
-
-    return true;
-}
-
-bool setCCRecord(Config &cfg, CCRecord &ccRcd, vector<vector<int>> &ccZoneParams) {
-    ccRcd.ccZones.clear();
-
-    for (auto &ccZoneParam : ccZoneParams) {
-        CCZone ccZone;
-
-        ccZone.enabled = true;
-        ccZone.ccLevel = 0;
-        ccZone.preCCLevel = 0;
-
-        ccZone.ccZoneID = ccZoneParam[0];
-        ccZone.vchID = ccZoneParam[1];
-
-        bool isFirst = true;
-
-        for (auto &item : ccRcd.ccZones) {  // Store only one ccZone for each vchID
-#ifndef _CPU_INFER
-            if (item.vchID == ccZone.vchID && item.ccZoneID == ccZone.ccZoneID) {
-#else
-            if (item.vchID == ccZone.vchID) {  // only one ccZone(cpu mode)
-#endif
-                cfg.lg(std::format("Duplicated ccZone: {} {}\n", ccZone.vchID, ccZone.ccZoneID));
-                isFirst = false;
-                break;
-            }
-        }
-
-        if (!isFirst)
-            continue;
-
-        for (int i = 0; i < 4; i++) {
-            Point pt;
-            pt.x = ccZoneParam[2 * i + 2];
-            pt.y = ccZoneParam[2 * i + 3];
-            ccZone.pts.push_back(pt);
-        }
-
-        ccZone.ccLevelThs[0] = ccZoneParam[10];
-        ccZone.ccLevelThs[1] = ccZoneParam[11];
-        ccZone.ccLevelThs[2] = ccZoneParam[12];
-
-        if (ccZone.ccLevelThs[0] > ccZone.ccLevelThs[1] || ccZone.ccLevelThs[1] > ccZone.ccLevelThs[2]) {
-            cfg.lg("ccLevelThs should be ordered.\n");
-            return false;
-        }
-
-        ccZone.ccNums.resize(cfg.ccWindowSize, 0);
-
-        ccZone.maxCC = 0;
-        ccZone.maxCCDay = 0;
-
-        for (int i = 0; i < NUM_CC_LEVELS - 1; i++) {
-            ccZone.accCCLevels[i] = 0;
-            ccZone.accCCLevelsDay[i] = 0;
-        }
-
-        // init mask with empty Mat. This is generated in CrowdCounter::runModel.
-        ccZone.mask = cv::Mat();
-#ifdef _CPU_INFER
-        ccZone.canvas = cv::Mat();
-        ccZone.roiCanvas = cv::Mat();
-#endif
-        ccRcd.ccZones.push_back(ccZone);
-    }
-
-    ccRcd.ccNumFrames.resize(cfg.numChannels);
-
-    for (int i = 0; i < cfg.numChannels; i++)
-        ccRcd.ccNumFrames[i].resize(cfg.ccWindowSize, 0.0f);
-
-    return true;
-}
-
-void loadIS(Config &cfg, string txtPathInit, vector<vector<int>> &cntLineParams, vector<vector<int>> &zoneParams,
-            vector<vector<int>> &ccZoneParams) {
-    int elementsMinusOnes[3] = {7, 11, 13};  // cntLineParmas-1, zoneParams-1, ccZoneParams-1 (in is.txt)
-
-    ifstream init(txtPathInit);
-
-    if (init.is_open()) {
-        int typeID;
-
-        while (init >> typeID) {
-            int data;
-            if (typeID == 3) {  // read scoreThs
-                init >> data;
-                cfg.odScoreTh = (data / 1000.0f);
-
-                init >> data;
-                cfg.fdScoreTh = (data / 1000.0f);
-            } else {  // read IS
-                vector<int> line;
-                int elementsMinusOne = elementsMinusOnes[typeID];
-
-                for (int i = 0; i < elementsMinusOne; i++) {
-                    init >> data;
-                    line.push_back(data);
-                }
-
-                switch (typeID) {
-                    case 0:
-                        cntLineParams.push_back(line);
-                        break;
-                    case 1:
-                        zoneParams.push_back(line);
-                        break;
-                    case 2:
-                        ccZoneParams.push_back(line);
-                        break;
-                    default:
-                        cfg.lg(std::format("typeID Error in loadIS: {}\n", typeID));
-                        break;
-                }
-            }
-        }
-    }
+void doRunModelCC(Mat &density, Mat &frame, int vchID) {
+    runModelCC(density, frame, vchID);
+    ccTreadDone = true;
 }

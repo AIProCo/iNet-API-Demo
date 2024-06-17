@@ -67,7 +67,7 @@
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
       <AdditionalLibraryDirectories>bin</AdditionalLibraryDirectories>
       <AdditionalDependencies>generator.lib;opencv_world490.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
@@ -89,24 +89,18 @@
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
       <AdditionalLibraryDirectories>bin</AdditionalLibraryDirectories>
       <AdditionalDependencies>generator_cpu.lib;opencv_world490.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="CameraStreamer.cpp" />
-    <ClCompile Include="logger.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="CameraStreamer.hpp" />
-    <ClInclude Include="cmat.h" />
     <ClInclude Include="include\generator.h" />
     <ClInclude Include="include\global.h" />
-    <ClInclude Include="include\json.hpp" />
     <ClInclude Include="include\util.h" />
-    <ClInclude Include="logger.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="inputs\config.json" />

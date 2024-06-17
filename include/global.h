@@ -12,6 +12,24 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
+/// Model Info
+#define INPUT_DIRECTORY "inputs/"
+
+#ifdef _WIN32
+#define CFG_FILEPATH INPUT_DIRECTORY "config.json"
+#else
+#define CFG_FILEPATH INPUT_DIRECTORY "config_jetson.json"
+#endif
+
+#define CC_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.net"
+#define CC_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.nez"
+#define OD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4.net"
+#define OD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4.nez"
+#define FD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_3.net"
+#define FD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_3.nez"
+#define PAR_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_par_1_4.net"
+#define PAR_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_par_1_4.nez"
+
 /// System
 #define PERSON 0  /// person should be the first object in a mapping list
 
@@ -28,8 +46,8 @@
 #define NUM_CC_LEVELS 4
 #define NET_WIDTH_CC 1920   /// net width for cc
 #define NET_HEIGHT_CC 1080  /// net height for cc
-#define OUT_WIDTH_CC 2048   /// net width for cc
-#define OUT_HEIGHT_CC 1536  /// net height for cc
+#define OUT_WIDTH_CC 2048   /// net width for cc(out)
+#define OUT_HEIGHT_CC 1536  /// net height for cc(out)
 
 #define NUM_ATTRIBUTES 30  /// number of attributes(should be compatible with the PAR model)
 #define ATT_GENDER 0       /// gender should be the first att in a mapping list
@@ -339,8 +357,6 @@ struct DetBox {
     PedAtts patts;  /// PAR info
 };
 
-class Logger;
-
 struct Config {
     std::string key;                       /// authorization Key
     uint frameLimit;                       /// number of frames to be processed
@@ -418,3 +434,41 @@ struct Config {
 
     std::function<void(std::string)> lg;
 };
+
+class CMat {
+   public:
+    cv::Mat frame;
+    int vchID;
+    unsigned int frameCnt;
+
+   public:
+    CMat() {
+        vchID = -1;
+        frameCnt = 0;
+    }
+
+    CMat(cv::Mat &frame, int vchID, unsigned int frameCnt) {
+        set(frame, vchID, frameCnt);
+    }
+
+    void get(cv::Mat &_frame, int &_vchID, unsigned int &_frameCnt) {
+        _frame = frame;
+        _vchID = vchID;
+        _frameCnt = frameCnt;
+    }
+
+    // Only one thread/writer can reset/write the counter's value.
+    void set(cv::Mat &_frame, int _vchID, unsigned int _frameCnt) {
+        frame = _frame;
+        vchID = _vchID;
+        frameCnt = _frameCnt;
+    }
+};
+
+#ifdef _WIN32
+#include <concurrent_queue.h>
+typedef concurrency::concurrent_queue<CMat> CMats;
+#else
+#include <tbb/concurrent_queue.h>
+typedef tbb::concurrent_queue<CMat> CMats;
+#endif

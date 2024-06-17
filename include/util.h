@@ -17,27 +17,12 @@
 // for sleep
 #include <thread>
 #include <chrono>
+
+namespace fs = std::filesystem;
 #endif
 
 using namespace std;
 using namespace cv;
-namespace fs = std::filesystem;
-
-const uchar colorTable[] = {
-    169, 83,  255, 249, 249, 27,  127, 255, 212, 240, 255, 255, 245, 245, 220, 255, 228, 196, 255, 235, 205, 138,
-    43,  226, 222, 184, 135, 95,  158, 160, 250, 235, 215, 210, 105, 30,  255, 127, 80,  100, 149, 237, 255, 248,
-    220, 220, 20,  60,  0,   255, 255, 0,   139, 139, 184, 134, 11,  169, 169, 169, 189, 183, 107, 255, 140, 0,
-    153, 50,  204, 233, 150, 122, 143, 188, 143, 0,   206, 209, 148, 0,   211, 255, 20,  147, 0,   191, 255, 30,
-    144, 255, 178, 34,  34,  255, 250, 240, 34,  139, 34,  255, 0,   255, 220, 220, 220, 248, 248, 255, 255, 215,
-    0,   218, 165, 32,  250, 128, 114, 210, 180, 140, 240, 255, 240, 255, 105, 180, 205, 92,  92,  255, 255, 240,
-    240, 230, 140, 230, 230, 250, 255, 240, 245, 124, 252, 0,   255, 250, 205, 173, 216, 230, 240, 128, 128, 224,
-    255, 255, 250, 250, 210, 211, 211, 211, 144, 238, 144, 255, 182, 193, 255, 160, 122, 32,  178, 170, 135, 206,
-    250, 119, 136, 153, 119, 136, 153, 176, 196, 222, 255, 255, 224, 0,   255, 0,   50,  205, 50,  250, 240, 230,
-    255, 0,   255, 102, 205, 170, 186, 85,  211, 147, 112, 219, 60,  179, 113, 123, 104, 238, 0,   250, 154, 72,
-    209, 204, 199, 21,  133, 245, 255, 250, 255, 228, 225, 255, 228, 181, 255, 222, 173, 253, 245, 230, 128, 128,
-    0,   107, 142, 35,  255, 165, 0,   255, 69,  0,   218, 112, 214, 238, 232, 170, 152, 251, 152, 175, 238, 238,
-    219, 112, 147, 255, 239, 213, 255, 218, 185, 205, 133, 63,  255, 192, 203, 221, 160, 221, 176, 224, 230, 128,
-    0,   128, 255, 0,   0,   188, 143, 143, 65,  105, 225, 139, 69,  19,  0,   128, 0,   240, 248, 255};
 
 /// @brief  A utility function to print out the elements of vector
 template <typename T>
@@ -59,6 +44,19 @@ inline void universal_sleep(long long ms) {
 /// @brief an utility class to visualize the results
 class Vis {
    public:
+    // normalize model path depending on the OS
+    static std::string normPath(const std::string &relativePath) {
+#ifdef _WIN32
+        return relativePath;
+#else
+        fs::path currentfilePath = __FILE__;
+        fs::path combinedPath = currentfilePath.parent_path() / relativePath;
+        fs::path absolutePath = fs::absolute(combinedPath);
+        // why fs::canonical: see
+        // https://stackoverflow.com/questions/62728674/get-the-absolute-path-from-stdfilesystempath-c
+        return fs::canonical(absolutePath).string();
+#endif
+    }
     /// draw bboxes with text info for each detected object
     static void drawBoxes(Mat &matImg, vector<Rect> boxes, vector<Scalar> boxColors, vector<vector<string>> texts,
                           vector<bool> emphasizes, Scalar textColor = Scalar(0, 0, 0),

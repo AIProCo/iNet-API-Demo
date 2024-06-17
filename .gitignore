@@ -6,5 +6,3 @@ x64/
 .clang-format
 *.mp4
 *.net
-*.vcxproj
-*.vcxproj.*

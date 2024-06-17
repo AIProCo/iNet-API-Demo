@@ -1,5 +1,5 @@
 /*==============================================================================
-* Copyright 2022 AIPro Inc.
+* Copyright 2024 AIPro Inc.
 * Author: Chun-Su Park (cspk@skku.edu)
 =============================================================================*/
 #pragma once
@@ -18,10 +18,37 @@
 #endif
 #endif
 
-#include <iostream>
-#include <opencv2/core.hpp>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "global.h"
+
+#include <iostream>
+#include <opencv2/core.hpp>
+#include <chrono>
+
+// wrapping Logger
+GENERATOR_API void setWriteLogger(Config &cfg);
+GENERATOR_API bool initLogger(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
+GENERATOR_API bool checkCmdLogger(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
+GENERATOR_API bool needToDrawLogger(int vchID);
+GENERATOR_API void writeDataLogger(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd, cv::Mat &frame,
+                                   unsigned int &frameCnt, int vchID, std::chrono::system_clock::time_point now);
+GENERATOR_API void destroyLogger();
+
+// wrapping Streamer
+GENERATOR_API bool initStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
+GENERATOR_API bool isEmptyStreamer(int vchID);
+GENERATOR_API bool tryPopStreamer(CMat &cmat, int vchID);
+GENERATOR_API void writeStreamer(cv::Mat &frame, int vchID);
+GENERATOR_API int getPeriodStreamer(int vchID);
+GENERATOR_API int getUnsafeSizeStreamer(int vchID);
+GENERATOR_API int getUnsafeSizeMaxStreamer();
+GENERATOR_API void destroyStreamer();
+
+// parsing
+GENERATOR_API bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
 
 /** @brief Initialize model
  *
