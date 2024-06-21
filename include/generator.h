@@ -4,6 +4,11 @@
 =============================================================================*/
 #pragma once
 
+// https://github.com/gabime/spdlog/discussions/2813
+// hahv: if build fails with _imp_MapViewOfFileNuma2, uncomment the following line
+#pragma comment(lib, "OneCore.lib")
+
+// config for export dll (windows) or so (linux)
 #ifdef _WIN32
 #ifdef GENERATOR_EXPORTS
 #define GENERATOR_API __declspec(dllexport)
@@ -27,6 +32,12 @@
 #include <iostream>
 #include <opencv2/core.hpp>
 #include <chrono>
+
+// wrapping getNow functions
+GENERATOR_API bool getNowLive(std::vector<cv::Mat> &nowMats);
+GENERATOR_API bool getNowOD(std::vector<std::string> &nowOD);
+GENERATOR_API bool getNowFD(std::vector<std::string> &nowFD);
+GENERATOR_API bool getNowCC(std::vector<std::string> &nowCC);
 
 // wrapping Logger
 GENERATOR_API void setWriteLogger(Config &cfg);
@@ -60,7 +71,7 @@ GENERATOR_API bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd,
  */
 GENERATOR_API bool initModel(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
 
-/** @brief Run detection and PAR models for a frame batch
+/** @brief Run detection and PAR models for a single frame
  *
  * @param dboxes return detected dboxes of the vchID channel
  * @param frame input frame

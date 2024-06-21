@@ -15,15 +15,23 @@
 /// Model Info
 #define INPUT_DIRECTORY "inputs/"
 
-#ifdef _WIN32
+// same config file for both windows and linux
 #define CFG_FILEPATH INPUT_DIRECTORY "config.json"
-#else
-#define CFG_FILEPATH INPUT_DIRECTORY "config_jetson.json"
-#endif
+
+/* Original model names
+aipro_od_1_4.net: yolov8l.net
+aipro_od_1_4.nez: yolov8n.nez
+aipro_fd_1_4_3.net: twins_svt_small_97.9439_57_uint8_bgr_crop_op17.net
+aipro_fd_1_4_3.nez: twins_svt_small_97.9439_57_uint8_bgr_crop_op17.nez
+aipro_cc_1_4_2.net: Ep_600_mae_55.57_mse_238.94_mat.net
+aipro_cc_1_4_2.nez: Ep_600_mae_55.57_mse_238.94_only_cnt_mat.nez
+aipro_par_1_4.net: swin_s3_tiny_224_hrp_adamw_b256_ema_aug.net
+aipro_par_1_4.nez: swin_s3_tiny_224_hrp_adamw_b256_ema_aug.nez
+*/
 
 #define CC_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.net"
 #define CC_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.nez"
-#define OD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4.net"
+#define OD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4_1.net"
 #define OD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4.nez"
 #define FD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_3.net"
 #define FD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_3.nez"
@@ -102,7 +110,8 @@
 #ifdef _WIN32
 #define AIPRO_PATH "c:/aipro/"
 #else
-#define AIPRO_PATH "/home/aipro/jetson/"
+#define AIPRO_PATH "aipro/"  // relative path to HOME directory,i.e, (home/<username>/aipro)
+
 #endif
 
 #define ROOT_PATH AIPRO_PATH "data/"
@@ -358,6 +367,10 @@ struct DetBox {
 };
 
 struct Config {
+    ODRecord *pOdRcd;
+    FDRecord *pFdRcd;
+    CCRecord *pCcRcd;
+
     std::string key;                       /// authorization Key
     uint frameLimit;                       /// number of frames to be processed
     std::vector<std::string> inputFiles;   /// list of the input files
