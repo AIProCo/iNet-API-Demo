@@ -9,7 +9,12 @@
      - Fire Classification
      - Crowd Counting
 
-- Commercial use must be approved by AIPro Inc. In this repository, there are several tools to prevent illegal use.
+# Licensing and Restrictions
+
+- Commercial use must be approved by AIPro Inc. 
+- The fps is limited to 10 for each channel.
+- The maximum number of inferences for all channels is set to 10000.
+- (Important!!) there are several hidden features to prevent illegal use in this repository.
   
 ------------------
 
@@ -27,7 +32,7 @@
 ### **Download and extract files**
 - Download and upzip the followings zip files. Then, copy and paste bin, inputs, and videos directories to the solution directory (the directory including the `.sln` file):
   + Cuda compute capability of your GPU should be 8.6 (ex: RTX 30xx): 
-    - https://drive.google.com/file/d/1VKa11iAKRjNvFQmn-mm5asEOdctQN2b9/view?usp=sharing
+    - https://drive.google.com/file/d/1_b1wq1K9yRitbFBIEcyS3tPvHhhPcLFq/view?usp=sharing
 
 ### **Run the project**
 
