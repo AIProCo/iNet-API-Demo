@@ -208,7 +208,7 @@ int main() {
             if (cfg.odChannels[vchID])
                 runModel(dboxes, frame, vchID, frameCnt, cfg.odScoreTh);
 
-            bool needToDraw = needToDrawLogger(vchID);
+            bool needToDraw = true; //draw always
             if (needToDraw || cfg.recording) {
                 if (cfg.odChannels[vchID])
                     drawBoxes(cfg, odRcd, frame, dboxes, vchID);
