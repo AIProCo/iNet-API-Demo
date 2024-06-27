@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <deque>
+#include <numeric>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
@@ -17,17 +18,6 @@
 
 // same config file for both windows and linux
 #define CFG_FILEPATH INPUT_DIRECTORY "config.json"
-
-/* Original model names
-aipro_od_1_4.net: yolov8l.net
-aipro_od_1_4.nez: yolov8n.nez
-aipro_fd_1_4_3.net: twins_svt_small_97.9439_57_uint8_bgr_crop_op17.net
-aipro_fd_1_4_3.nez: twins_svt_small_97.9439_57_uint8_bgr_crop_op17.nez
-aipro_cc_1_4_2.net: Ep_600_mae_55.57_mse_238.94_mat.net
-aipro_cc_1_4_2.nez: Ep_600_mae_55.57_mse_238.94_only_cnt_mat.nez
-aipro_par_1_4.net: swin_s3_tiny_224_hrp_adamw_b256_ema_aug.net
-aipro_par_1_4.nez: swin_s3_tiny_224_hrp_adamw_b256_ema_aug.nez
-*/
 
 #define CC_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.net"
 #define CC_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.nez"
@@ -252,6 +242,7 @@ struct CCZone {
     int accCCLevelsDay[NUM_CC_LEVELS - 1];  /// for internal usage in logger
 
     std::deque<int> ccNums;
+    double avgWindow;
 
     void pushCCNum(int ccNum) {
         if (ccNums.size() <= 0)
@@ -267,9 +258,13 @@ struct CCZone {
         ccNums.pop_front();
         ccNums.push_back(ccNum);
 
+        int sum = std::reduce(ccNums.begin(), ccNums.end());
+        avgWindow = (double)sum / ccNums.size();
+        int average = avgWindow + 0.5;
+
         ccLevel = 0;
         for (int l = 2; l >= 0; l--) {
-            if (ccNum > ccLevelThs[l]) {
+            if (average >= ccLevelThs[l]) {
                 ccLevel = l + 1;
                 break;
             }

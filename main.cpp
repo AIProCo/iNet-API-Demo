@@ -25,7 +25,7 @@
 // util
 #include "util.h"
 
-#define DRAW_DETECTION_INFO false
+#define DRAW_DETECTION_INFO true
 #define DRAW_FIRE_DETECTION true
 #define DRAW_FIRE_DETECTION_COUNTING true
 #define DRAW_CNTLINE true
@@ -208,7 +208,7 @@ int main() {
             if (cfg.odChannels[vchID])
                 runModel(dboxes, frame, vchID, frameCnt, cfg.odScoreTh);
 
-            bool needToDraw = true; //draw always
+            bool needToDraw = needToDrawLogger(vchID);
             if (needToDraw || cfg.recording) {
                 if (cfg.odChannels[vchID])
                     drawBoxes(cfg, odRcd, frame, dboxes, vchID);
@@ -332,6 +332,9 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
         Scalar boxColor(50, 255, 255);
         vector<string> texts;
 
+        if (dbox.objID == 8)
+            boxColor = Scalar(255, 50, 255);
+
         bool isFemale;
         int probFemale;
 
@@ -354,7 +357,7 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
             texts.push_back(objName);
             // vector<string> texts{objName, timeInfo};
 
-            if (label == PERSON) {
+            if (0 && label == PERSON) {
                 string trkInfo;
                 int period = now - dbox.inTime;
                 if (period < cfg.longLastingObjTh) {  // no action
@@ -534,7 +537,7 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
                 vector<Mat> chans(3);
 
                 split(img, chans);
-                chans[2] += density;  // add to red channel
+                chans[2] += 10 * density;  // add to red channel
                 merge(chans, img);
             }
 
@@ -579,7 +582,8 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
             if (ccZone.vchID == vchID) {
                 string text =
                     // std::format(" -CZone {}: {:>4}", ccZone.ccZoneID+1, ccZone.ccNums.back());
-                    std::format("  CZone {}:{:>7}(L{})", ccZone.ccZoneID, ccZone.ccNums.back(), ccZone.ccLevel);
+                    std::format("  CZone {}:{:>7}(L{} {:.2f})", ccZone.ccZoneID, ccZone.ccNums.back(), ccZone.ccLevel,
+                                ccZone.avgWindow);
                 ccTexts.push_back(text);
             }
         }
