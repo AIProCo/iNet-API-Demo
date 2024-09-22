@@ -51,6 +51,7 @@ void doRunModelCC(Mat &density, Mat &frame, int vchID);
 std::atomic<bool> ccTreadDone = false;
 std::atomic<bool> fdTreadDone = false;
 
+//start engine
 int main() {
     Config cfg;
     ODRecord odRcd;
