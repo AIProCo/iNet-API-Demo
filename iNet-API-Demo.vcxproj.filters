@@ -18,6 +18,12 @@
     <ClCompile Include="main.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="camerastreamer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="logger.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\generator.h">
@@ -27,6 +33,12 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="include\util.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="camerastreamer.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="logger.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

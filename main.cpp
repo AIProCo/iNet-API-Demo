@@ -21,6 +21,8 @@
 // core
 #include "global.h"
 #include "generator.h"
+#include "camerastreamer.hpp"
+#include "logger.h"
 
 // util
 #include "util.h"
@@ -37,8 +39,6 @@
 
 using namespace std;
 using namespace cv;
-using namespace std::filesystem;
-using namespace std::chrono;
 
 void drawZones(Config &cfg, ODRecord &odRcd, Mat &img, int vchID, double alpha);
 void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha = 0.7);
@@ -51,15 +51,16 @@ void doRunModelCC(Mat &density, Mat &frame, int vchID);
 std::atomic<bool> ccTreadDone = false;
 std::atomic<bool> fdTreadDone = false;
 
-//start engine
+// start engine
 int main() {
     Config cfg;
     ODRecord odRcd;
     FDRecord fdRcd;
     CCRecord ccRcd;
 
-    setWriteLogger(cfg);  // set cfg.lg. This should be called before parseConfigAPI()
-    std::function<void(std::string)> lg = cfg.lg;
+    // Wrapping Logger
+    std::function<void(std::string)> lg = Logger::writeLog;
+    cfg.lg = lg;
 
     if (!parseConfigAPI(cfg, odRcd, fdRcd, ccRcd)) {  // parse config.json, cam.json, and is.txt
         lg("parseConfigAPI: Parsing Error!\n");
@@ -88,8 +89,8 @@ int main() {
         return -1;
     }
 
-    initLogger(cfg, odRcd, fdRcd, ccRcd);  // should be called before initStreamer
-    initStreamer(cfg, odRcd, fdRcd, ccRcd);
+    Logger logger(cfg, odRcd, fdRcd, ccRcd);  // should be made before streamer
+    CameraStreamer streamer(cfg, odRcd, fdRcd, ccRcd, &logger);
 
     unsigned int frameCnt = 0;
     unsigned int frameLimit = cfg.frameLimit;  // number of frames to be processed
@@ -117,15 +118,15 @@ int main() {
         if (sleepPeriodMain > 0)
             this_thread::sleep_for(chrono::milliseconds(sleepPeriodMain));
 
-        if (!isEmptyStreamer(tVchID)) {
+        if (!streamer.empty(tVchID)) {
             CMat cframe;
-            tryPopStreamer(cframe, tVchID);  // get a new cframe
+            streamer.tryPop(cframe, tVchID);  // get a new cframe
 
             Mat frame = cframe.frame;  // fix odBatchSize to 1
             int vchID = cframe.vchID;
             frameCnt = cframe.frameCnt;
 
-            if (!checkCmdLogger(cfg, odRcd, fdRcd, ccRcd)) {
+            if (!logger.checkCmd(cfg, odRcd, fdRcd, ccRcd)) {
                 lg("Break loop by checkCmdLogger\n");
                 break;
             }
@@ -211,7 +212,7 @@ int main() {
 
             end = chrono::steady_clock::now();
 
-            bool needToDraw = needToDrawLogger(vchID);
+            bool needToDraw = logger.needToDraw(vchID);
             if (needToDraw || cfg.recording) {
                 if (cfg.odChannels[vchID])
                     drawBoxes(cfg, odRcd, frame, dboxes, vchID);
@@ -224,16 +225,16 @@ int main() {
             }
 
             if (cfg.recording)
-                writeStreamer(frame, vchID);  // write a frame to the output video
+                streamer.write(frame, vchID);  // write a frame to the output video
 
-            writeDataLogger(cfg, odRcd, fdRcd, ccRcd, frame, frameCnt, vchID, now);
+            logger.writeData(cfg, odRcd, fdRcd, ccRcd, frame, frameCnt, vchID, now);
 
             int inf = chrono::duration_cast<chrono::milliseconds>(end - start).count();
 
             if (frameCnt % 20 == 0)
                 lg(std::format("[{}]Frame{:>4}>  SP({:>2}, {:>3}), Gap(FD: {}, CC: {}),  Buf: {},  Inf: {}ms\n", vchID,
-                               frameCnt, sleepPeriodMain, getPeriodStreamer(vchID), fdPeriod, ccPeriod,
-                               getUnsafeSizeStreamer(vchID), inf));
+                               frameCnt, sleepPeriodMain, streamer.unsafeSize(vchID), fdPeriod, ccPeriod,
+                               streamer.unsafeSize(vchID), inf));
 
             if (frameCnt > 10 && frameCnt < 100)  // skip the start frames and limit the number of elements
                 infs.push_back(inf);
@@ -243,7 +244,7 @@ int main() {
         if (tVchID >= cfg.numChannels)
             tVchID = 0;
 
-        if (getUnsafeSizeMaxStreamer() > 0) {
+        if (streamer.unsafeSizeMax() > 0) {
             sleepPeriodMain = 0;
         } else {
             if (sleepPeriodMain < 10)
@@ -262,9 +263,9 @@ int main() {
     if (ccTh)
         ccTh->join();
 
-    destroyModel();     // destroy all models
-    destroyLogger();    // destroy logger
-    destroyStreamer();  // destroy streamer
+    destroyModel();      // destroy all models
+    logger.destroy();    // destroy logger
+    streamer.destroy();  // destroy streamer
 
     if (infs.size() > 1) {
         float avgInf = accumulate(infs.begin(), infs.end(), 0) / infs.size();
