@@ -28,10 +28,10 @@
 #define DRAW_DETECTION_INFO true
 #define DRAW_FIRE_DETECTION true
 #define DRAW_FIRE_DETECTION_COUNTING true
-#define DRAW_CNTLINE true
-#define DRAW_CNTLINE_COUNTING true
-#define DRAW_ZONE true
-#define DRAW_ZONE_COUNTING true
+#define DRAW_CNTLINE false
+#define DRAW_CNTLINE_COUNTING false
+#define DRAW_ZONE false
+#define DRAW_ZONE_COUNTING false
 #define DRAW_CC true
 #define DRAW_CC_COUNTING true
 
@@ -87,7 +87,7 @@ int main() {
         return -1;
     }
 
-    initLogger(cfg, odRcd, fdRcd, ccRcd);
+    initLogger(cfg, odRcd, fdRcd, ccRcd);  // should be called before initStreamer
     initStreamer(cfg, odRcd, fdRcd, ccRcd);
 
     unsigned int frameCnt = 0;
@@ -208,6 +208,8 @@ int main() {
             if (cfg.odChannels[vchID])
                 runModel(dboxes, frame, vchID, frameCnt, cfg.odScoreTh);
 
+            end = chrono::steady_clock::now();
+
             bool needToDraw = needToDrawLogger(vchID);
             if (needToDraw || cfg.recording) {
                 if (cfg.odChannels[vchID])
@@ -219,8 +221,6 @@ int main() {
                 if (cfg.ccChannels[vchID])
                     drawCC(cfg, ccRcd, densityChPre[vchID], frame, vchID);
             }
-
-            end = chrono::steady_clock::now();
 
             if (cfg.recording)
                 writeStreamer(frame, vchID);  // write a frame to the output video
@@ -484,7 +484,7 @@ void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh) 
     int w = img.cols;
     string strFire = "X", strSmoke = "X";
 
-    if (h < 380 || w < 500)
+    if (h < 720 || w < 1280)
         return;
 
     const int fx = w - 190, fy = 290;
@@ -528,16 +528,13 @@ void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh) 
 }
 
 void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
-    if (img.rows < 380 || img.cols < 500)
-        return;
-
     if (DRAW_CC) {
         if (cfg.boostMode) {
             if (!density.empty()) {
                 vector<Mat> chans(3);
 
                 split(img, chans);
-                chans[2] += 10 * density;  // add to red channel
+                chans[2] += density;  // add to red channel
                 merge(chans, img);
             }
 
@@ -567,6 +564,9 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
             }
         }
     }
+
+    if (img.rows < 720 || img.cols < 1280)
+        return;
 
     ////////////////////
     // draw couniting results
@@ -602,6 +602,11 @@ void doRunModelFD(Mat &frame, int vchID, uint frameCnt) {
 }
 
 void doRunModelCC(Mat &density, Mat &frame, int vchID) {
+    // chrono::steady_clock::time_point start, end;
+    // start = std::chrono::steady_clock::now();
     runModelCC(density, frame, vchID);
+    // end = std::chrono::steady_clock::now();
+    // int inf = chrono::duration_cast<chrono::milliseconds>(end - start).count();
+    // cout << " Crowd Counting Inference time: " << inf << "ms\n";
     ccTreadDone = true;
 }

@@ -22,9 +22,9 @@
 #define CC_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.net"
 #define CC_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.nez"
 #define OD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4_1.net"
-#define OD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4.nez"
-#define FD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_3.net"
-#define FD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_3.nez"
+#define OD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4_1.nez"
+#define FD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_4.net"
+#define FD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_4.nez"
 #define PAR_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_par_1_4.net"
 #define PAR_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_par_1_4.nez"
 
@@ -35,8 +35,13 @@
 #define SMOKE 0
 #define FIRE 1
 
+#ifndef _CPU_INFER
+#define NET_WIDTH_OD 1920   /// net width for od
+#define NET_HEIGHT_OD 1081  /// net height for od
+#else
 #define NET_WIDTH_OD 960   /// net width for od
-#define NET_HEIGHT_OD 544  /// net height for od
+#define NET_HEIGHT_OD 540  /// net height for od
+#endif
 
 #define NET_WIDTH_FD 640   /// net width for fd
 #define NET_HEIGHT_FD 360  /// net height for fd
@@ -124,6 +129,8 @@
 #define CMD_MODIFY_CCZONE 7
 #define CMD_REMOVE_CCZONE 8
 #define CMD_UPDATE_SCORETHS 50
+#define CMD_ENABLE_TARGET_LIVE_CHANNEL 51
+#define CMD_DISABLE_TARGET_LIVE_CHANNEL 52
 #define CMD_CLEARLOG 100
 #define CMD_REMOVE_ALL_LINES_ZONES 101
 #define CMD_REMOVE_ALL_LINES 102
@@ -180,7 +187,6 @@ struct CCZone {
     cv::Point roiTL, roiBR, roiBRScaled;  /// for internal usage in CrowdCounter(only for CPU)
     cv::Size roiScaledSize;
     double sH, sW;
-    // int roiScaledH, roiScaledW;
 
     void setCanvas(cv::Mat &frame) {
         if (canvas.empty())
