@@ -22,13 +22,13 @@ using namespace std::filesystem;
 using namespace std::chrono;
 
 class Logger {
-    Config* pCfg;
+    Config *pCfg;
 
     bool logEnable;
     bool debugMode;
-    bool writeLive; //for internal usage
-    int numChannels, numPages; //at most 9 channels for each page
-    int targetLiveChannel; // live channel to be drown
+    bool writeLive;             // for internal usage
+    int numChannels, numPages;  // at most 9 channels for each page
+    int targetLiveChannel;      // live channel to be drown
 
     vector<tm> preTms;
     vector<Mat> canvases;
@@ -44,17 +44,17 @@ class Logger {
     vector<bool> pageUpdated;
     vector<bool> vchUpdated;
 
-    //for debug
+    // for debug
     VideoWriter writer;
 
    private:
     int toABTime(string &str);
     void newDate(int numChannels, tm *inputTm);
     bool checkDirectories(int numChannels);
-    string normLogPath(string path); //get normalized path for windows and linux
+    string normLogPath(string path);  // get normalized path for windows and linux
 
     void drawCanvase(Mat &frame, int vchID, tm *curTm, int msec);
-        
+
     void writeIS(Config &cfg, ODRecord &odRcd, CCRecord &ccRcd);
     void writeCntLine(ofstream &f, CntLine *c, CntLine *p = NULL);
     void writeZone(ofstream &f, Zone *c, Zone *p = NULL);
@@ -65,8 +65,9 @@ class Logger {
     void writeNowFD(int vchID, string dayInfo, int sec);
     void writeNowCC(CCRecord &ccRcd, int vchID, string dayInfo, int sec);
 
-    string getNowCntLine(CntLine* c);
-    string getNowZone(Zone* c);
+    string getNowCntLine(CntLine *c);
+    string getNowZone(Zone *c);
+
    public:
     Logger(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
     ~Logger();
@@ -87,8 +88,8 @@ class Logger {
                    int vchID, system_clock::time_point now);
     void destroy();
 
-    void getNowLive(vector<Mat>& nowMats);
-    void getNowOD(vector<string>& nowOD);
-    void getNowFD(vector<string>& nowFD);
-    void getNowCC(vector<string>& nowCC);
+    void getNowLive(vector<Mat> &nowMats);
+    void getNowOD(vector<string> &nowOD);
+    void getNowFD(vector<string> &nowFD);
+    void getNowCC(vector<string> &nowCC);
 };

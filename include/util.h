@@ -54,6 +54,7 @@ class FileUtil {
     static std::string getHomeDirPath() {
         return fs::path(getenv("HOME")).string();
     }
+
     // get current working directory of executable file
     static std::string getExecDirPath() {
 #ifdef _WIN32

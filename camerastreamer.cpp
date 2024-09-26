@@ -5,8 +5,7 @@
 #include "opencv2/opencv.hpp"
 //#include "util.h"
 
-CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd,
-                               CCRecord &ccRcd, Logger *_pLogger) {
+CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd, Logger *_pLogger) {
     pCfg = &cfg;
     pOdRcd = &odRcd;
     pFdRcd = &fdRcd;
@@ -36,10 +35,10 @@ CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd,
     cmatsAll.resize(numChannels);
 
     for (int vchID = 0; vchID < numChannels; vchID++) {
-        if (stopFlag) return;
+        if (stopFlag)
+            return;
 
-        std::thread *t =
-            new std::thread(&CameraStreamer::keepConnected, this, vchID);
+        std::thread *t = new std::thread(&CameraStreamer::keepConnected, this, vchID);
         cameraThreads.push_back(t);
     }
 }
@@ -58,7 +57,8 @@ void CameraStreamer::destroy() {
     }
 
     if (pCfg->recording)
-        for (auto &videoWriter : videoWriters) videoWriter.release();
+        for (auto &videoWriter : videoWriters)
+            videoWriter.release();
 
     // std::cout << "destory CameraStreamer ends\n";
 }
@@ -77,11 +77,11 @@ void CameraStreamer::keepConnected(int vchID) {
             return;
 
         time_t time_begin = time(0);
-        cv::VideoCapture capture(input); //opencv capture 객체 생성
-        
+        cv::VideoCapture capture(input);  // opencv capture 객체 생성
+
         time_t time_1 = time(0) - time_begin;
-        
-        if (capture.isOpened()) { //연결 완료
+
+        if (capture.isOpened()) {        //연결 완료
             pCfg->vchStates[vchID] = 1;  // set connected flag
 
             // Quit before conntect
@@ -220,32 +220,34 @@ bool CameraStreamer::working(cv::VideoCapture *capture, int vchID) {
 
         if (!capture->grab()) {
             grapFailCnt++;
-            lg(std::format(" [{}]Grab Fail - Fail Count: {}\n", vchID,
-                           grapFailCnt));
+            lg(std::format(" [{}]Grab Fail - Fail Count: {}\n", vchID, grapFailCnt));
 
-            if (grapFailCnt > 2) return false;
+            if (grapFailCnt > 2)
+                return false;
         } else {
             cv::Mat frame;
-            capture->retrieve(frame); //capture 객체를 이용한 영상 수신
+            capture->retrieve(frame);  // capture 객체를 이용한 영상 수신
             if (frame.empty()) {
                 retrieveEmptyCnt++;
-                lg(std::format(" [{}]Retrieve Fail - Fail Count: {}\n", vchID,
-                               retrieveEmptyCnt));
+                lg(std::format(" [{}]Retrieve Fail - Fail Count: {}\n", vchID, retrieveEmptyCnt));
 
-                if (retrieveEmptyCnt > 2) return false;
+                if (retrieveEmptyCnt > 2)
+                    return false;
             } else {
                 CMats &cmats = cmatsAll[vchID];
                 int curBufferSize = cmats.unsafe_size();
 
                 if (curBufferSize >= maxBufferSize / 2) {
-                    if (sleepPeriod < 3 * initSleepPeriod) sleepPeriod += 5;
+                    if (sleepPeriod < 3 * initSleepPeriod)
+                        sleepPeriod += 5;
 
                     if (curBufferSize >= maxBufferSize) {
                         CMat tmp;
                         cmats.try_pop(tmp);
                     }
                 } else {
-                    if (sleepPeriod > initSleepPeriod) sleepPeriod -= 5;
+                    if (sleepPeriod > initSleepPeriod)
+                        sleepPeriod -= 5;
                 }
 
                 int frameCnt = frameCnts[vchID]++;
@@ -253,7 +255,8 @@ bool CameraStreamer::working(cv::VideoCapture *capture, int vchID) {
             }
         }
 
-        if (stopFlag) return false;
+        if (stopFlag)
+            return false;
 
         universal_sleep(sleepPeriod);
     }

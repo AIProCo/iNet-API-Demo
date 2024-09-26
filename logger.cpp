@@ -14,7 +14,7 @@ Logger::Logger(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
 
     logEnable = cfg.logEnable;
     numChannels = cfg.numChannels;
-    numPages = ((numChannels - 1) / 9) + 1; //9 channels are displayed in one channel
+    numPages = ((numChannels - 1) / 9) + 1;  // 9 channels are displayed in one channel
     preOdRcd = odRcd;
     debugMode = cfg.debugMode;
     targetLiveChannel = -1;
@@ -24,7 +24,7 @@ Logger::Logger(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
 
     for (int i = 0; i < numPages; i++)
         canvases.push_back(Mat::zeros(1080, 1920, CV_8UC3));
-    
+
     vchStatesPre.resize(numChannels, 0);
 
     maxFireProbs.resize(numChannels, 0);
@@ -49,7 +49,7 @@ Logger::Logger(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
 
     createLog();
 
-    if (!logEnable) 
+    if (!logEnable)
         return;
 
     // for debug
@@ -160,8 +160,7 @@ void Logger::newDate(int numChannels, tm *inputTm) {
 
     // writeLog(std::format("New Date: {}", dayInfo));
 
-    vector<string> targetDirs = {normLogPath(CNT_PATH), normLogPath(FD_PATH),
-                                 normLogPath(CC_PATH)};
+    vector<string> targetDirs = {normLogPath(CNT_PATH), normLogPath(FD_PATH), normLogPath(CC_PATH)};
     int curABTime = toABTime(dayInfo);
 
     for (const string &targetDir : targetDirs) {
@@ -200,8 +199,7 @@ void Logger::newDate(int numChannels, tm *inputTm) {
             string dirName = item.path().filename().string();
 
             if (dirName.length() != 8) {
-                writeLog(std::format("Directory name error. Delete this: {}\n",
-                                     dirName));
+                writeLog(std::format("Directory name error. Delete this: {}\n", dirName));
                 remove_all(item);
                 continue;
             }
@@ -265,13 +263,13 @@ void Logger::drawCanvase(Mat &frame, int vchID, tm *curTm, int msec) {
     if (vchUpdated[vchID])
         return;
 
-    int page = (vchID / 9); //ID starts from 0
+    int page = (vchID / 9);  // ID starts from 0
     Mat &canvase = canvases[page];
 
-    //do not draw
+    // do not draw
     if (targetLiveChannel != -1 && targetLiveChannel != vchID)
         return;
-        
+
     if (numChannels == 1 || targetLiveChannel == vchID) {
         resize(frame, canvase, Size(1920, 1080));
     } else {
@@ -290,7 +288,7 @@ void Logger::drawCanvase(Mat &frame, int vchID, tm *curTm, int msec) {
 
         Point tl(vchID % elements * tW, (vchID / elements) % elements * tH);
         resized.copyTo(canvase(Rect(tl, Size(tW, tH))));
-    }    
+    }
 
     vchUpdated[vchID] = true;
     pageUpdated[page] = true;
@@ -301,8 +299,7 @@ void Logger::writeIS(Config &cfg, ODRecord &odRcd, CCRecord &ccRcd) {
     string txtPathIS = normLogPath(string(CONFIG_PATH)) + "/" + filenameIS;
 
     ofstream is(txtPathIS);
-    writeLog(std::format("writeIS: Line = {}, Zone = {}, CZone = {}\n",
-                         odRcd.cntLines.size(), odRcd.zones.size(),
+    writeLog(std::format("writeIS: Line = {}, Zone = {}, CZone = {}\n", odRcd.cntLines.size(), odRcd.zones.size(),
                          ccRcd.ccZones.size()));
 
     if (is.is_open()) {
@@ -333,7 +330,7 @@ void Logger::writeIS(Config &cfg, ODRecord &odRcd, CCRecord &ccRcd) {
         for (auto &ccZone : ccRcd.ccZones) {
             is << 2 << " ";
             is << ccZone.ccZoneID << " ";
-            is << ccZone.vchID << " ";            
+            is << ccZone.vchID << " ";
             is << ccZone.pts[0].x << " ";
             is << ccZone.pts[0].y << " ";
             is << ccZone.pts[1].x << " ";
@@ -356,7 +353,7 @@ void Logger::writeIS(Config &cfg, ODRecord &odRcd, CCRecord &ccRcd) {
     }
 }
 
-void Logger::writeChInfo() { //called in CameraStreamer
+void Logger::writeChInfo() {  // called in CameraStreamer
     string filename = "chinfo.txt";
     string txtPath = normLogPath(string(CONFIG_PATH)) + "/" + filename;
 
@@ -372,7 +369,7 @@ void Logger::writeChInfo() { //called in CameraStreamer
         }
 
         chInfo.close();
-    }    
+    }
 }
 
 void Logger::writeCntLine(ofstream &f, CntLine *c, CntLine *p) {
@@ -476,8 +473,8 @@ bool Logger::createLog() {
     return true;
 }
 
-bool Logger::needToDraw(int vchID) { 
-    return !vchUpdated[vchID]; 
+bool Logger::needToDraw(int vchID) {
+    return !vchUpdated[vchID];
 }
 
 bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
@@ -638,7 +635,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     int fH = cfg.frameHeights[zone.vchID];
                     int fW = cfg.frameWidths[zone.vchID];
-                                        
+
                     for (int i = 0; i < 4; i++) {
                         Point pt;
                         ss >> pt.x;
@@ -1288,7 +1285,7 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
     }
 
     if (preTm->tm_sec != curTm->tm_sec) {
-        deleteNowLive(curTm->tm_sec, cfg.boostMode); //delete old file
+        deleteNowLive(curTm->tm_sec, cfg.boostMode);  // delete old file
 
         if (cfg.odChannels[vchID]) {
             writeNowOD(odRcd, vchID, dayInfo, curTm->tm_sec);
@@ -1414,7 +1411,7 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
             writeNowCC(ccRcd, vchID, dayInfo, curTm->tm_sec);
 
             vector<string> ccEventLogs;
-            for (CCZone& ccZone : ccRcd.ccZones) {
+            for (CCZone &ccZone : ccRcd.ccZones) {
                 if (ccZone.vchID != vchID)
                     continue;
 
@@ -1424,7 +1421,7 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
                 if (curCCNum > ccZone.maxCC)
                     ccZone.maxCC = curCCNum;
 
-                if (ccZone.preCCLevel < ccZone.ccLevel) { //when ccLevel gets higher
+                if (ccZone.preCCLevel < ccZone.ccLevel) {  // when ccLevel gets higher
                     ccZone.accCCLevels[ccZone.ccLevel - 1]++;
 
                     string text =
@@ -1468,20 +1465,22 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
 
 void Logger::writeNowOD(ODRecord &odRcd, int vchID, string dayInfo, int sec) {
     string filenameODNow = std::format("{}.txt", sec % 10);
-    string txtPathODNow = normLogPath(string(CNT_PATH)) + "/" + dayInfo + "/" +
-                          to_string(vchID) + "/now/" + filenameODNow;
+    string txtPathODNow =
+        normLogPath(string(CNT_PATH)) + "/" + dayInfo + "/" + to_string(vchID) + "/now/" + filenameODNow;
     ofstream logFileODNow(txtPathODNow);
 
     if (logFileODNow.is_open()) {
         for (int n = 0; n < odRcd.cntLines.size(); n++) {
-            if (odRcd.cntLines[n].vchID != vchID) continue;
+            if (odRcd.cntLines[n].vchID != vchID)
+                continue;
 
             CntLine &c = odRcd.cntLines[n];
             writeCntLine(logFileODNow, &c);
         }
 
         for (int n = 0; n < odRcd.zones.size(); n++) {
-            if (odRcd.zones[n].vchID != vchID) continue;
+            if (odRcd.zones[n].vchID != vchID)
+                continue;
 
             Zone &z = odRcd.zones[n];
             writeZone(logFileODNow, &z);
@@ -1491,17 +1490,17 @@ void Logger::writeNowOD(ODRecord &odRcd, int vchID, string dayInfo, int sec) {
     }
 }
 
-void Logger::getNowOD(vector<string>& nowOD) {
-    ODRecord* pOdRcd = pCfg->pOdRcd;
+void Logger::getNowOD(vector<string> &nowOD) {
+    ODRecord *pOdRcd = pCfg->pOdRcd;
 
     for (int n = 0; n < pOdRcd->cntLines.size(); n++) {
-        CntLine& c = pOdRcd->cntLines[n];
+        CntLine &c = pOdRcd->cntLines[n];
         string text = getNowCntLine(&c);
         nowOD.push_back(text);
     }
 
     for (int n = 0; n < pOdRcd->zones.size(); n++) {
-        Zone& z = pOdRcd->zones[n];
+        Zone &z = pOdRcd->zones[n];
         string text = getNowZone(&z);
         nowOD.push_back(text);
     }
@@ -1509,13 +1508,12 @@ void Logger::getNowOD(vector<string>& nowOD) {
 
 void Logger::writeNowFD(int vchID, string dayInfo, int sec) {
     string filenameFDNow = std::format("{}.txt", sec % 10);
-    string txtPathFDNow = normLogPath(string(FD_PATH)) + "/" + dayInfo + "/" +
-                          to_string(vchID) + "/now/" + filenameFDNow;
+    string txtPathFDNow =
+        normLogPath(string(FD_PATH)) + "/" + dayInfo + "/" + to_string(vchID) + "/now/" + filenameFDNow;
     ofstream logFileFDNow(txtPathFDNow);
 
     if (logFileFDNow.is_open()) {
-        string text = std::format("{} {} {} {}\n", accNumFires[vchID],
-                                  accNumSmokes[vchID], maxFireProbs[vchID],
+        string text = std::format("{} {} {} {}\n", accNumFires[vchID], accNumSmokes[vchID], maxFireProbs[vchID],
                                   maxSmokeProbs[vchID]);
         logFileFDNow << text;
 
@@ -1523,29 +1521,29 @@ void Logger::writeNowFD(int vchID, string dayInfo, int sec) {
     }
 }
 
-void Logger::getNowFD(vector<string>& nowFD) {
+void Logger::getNowFD(vector<string> &nowFD) {
     for (int vchID = 0; vchID < numChannels; vchID++) {
-        string text = std::format("{} {} {} {} {}\n", vchID, accNumFires[vchID], accNumSmokes[vchID], maxFireProbs[vchID],
-            maxSmokeProbs[vchID]);
+        string text = std::format("{} {} {} {} {}\n", vchID, accNumFires[vchID], accNumSmokes[vchID],
+                                  maxFireProbs[vchID], maxSmokeProbs[vchID]);
         nowFD.push_back(text);
     }
 }
 
 void Logger::writeNowCC(CCRecord &ccRcd, int vchID, string dayInfo, int sec) {
     string filenameCCNow = std::format("{}.txt", sec % 10);
-    string txtPathCCNow = normLogPath(string(CC_PATH)) + "/" + dayInfo + "/" +
-                          to_string(vchID) + "/now/" + filenameCCNow;
+    string txtPathCCNow =
+        normLogPath(string(CC_PATH)) + "/" + dayInfo + "/" + to_string(vchID) + "/now/" + filenameCCNow;
     ofstream logFileCCNow(txtPathCCNow);
 
     if (logFileCCNow.is_open()) {
-        for (CCZone& ccZone : ccRcd.ccZones) {
+        for (CCZone &ccZone : ccRcd.ccZones) {
             if (ccZone.vchID != vchID)
                 continue;
 
             int curCCNum = ccZone.ccNums.back();
 
-            string text = std::format("{} {} {} {} {} {} {}\n", ccZone.ccZoneID, curCCNum, ccZone.maxCC, ccZone.ccLevel, ccZone.accCCLevels[0],
-                ccZone.accCCLevels[1], ccZone.accCCLevels[2]);
+            string text = std::format("{} {} {} {} {} {} {}\n", ccZone.ccZoneID, curCCNum, ccZone.maxCC, ccZone.ccLevel,
+                                      ccZone.accCCLevels[0], ccZone.accCCLevels[1], ccZone.accCCLevels[2]);
 
             logFileCCNow << text;
         }
@@ -1554,14 +1552,14 @@ void Logger::writeNowCC(CCRecord &ccRcd, int vchID, string dayInfo, int sec) {
     }
 }
 
-void Logger::getNowCC(vector<string>& nowCC) {
-    CCRecord* pCcRcd = pCfg->pCcRcd;
+void Logger::getNowCC(vector<string> &nowCC) {
+    CCRecord *pCcRcd = pCfg->pCcRcd;
 
-    for (CCZone& ccZone : pCcRcd->ccZones) {
+    for (CCZone &ccZone : pCcRcd->ccZones) {
         int curCCNum = ccZone.ccNums.back();
 
-        string text = std::format("{} {} {} {} {} {} {} {}\n", ccZone.ccZoneID, ccZone.vchID, curCCNum, ccZone.maxCC, ccZone.ccLevel, ccZone.accCCLevels[0],
-            ccZone.accCCLevels[1], ccZone.accCCLevels[2]);
+        string text = std::format("{} {} {} {} {} {} {} {}\n", ccZone.ccZoneID, ccZone.vchID, curCCNum, ccZone.maxCC,
+                                  ccZone.ccLevel, ccZone.accCCLevels[0], ccZone.accCCLevels[1], ccZone.accCCLevels[2]);
 
         nowCC.push_back(text);
     }
@@ -1581,7 +1579,7 @@ void Logger::writeNowLive(int sec, int msec, bool boostMode) {
                 preTimes[p] = msecD;
 
                 string filename = std::format("{}p{:02d}{}.jpg", p, sec % 60, msecD);
-                //string filename = std::format("{}p{}{}.jpg", p, sec % 10, msecD);
+                // string filename = std::format("{}p{}{}.jpg", p, sec % 10, msecD);
                 string imgPath = normLogPath(string(CHIMGS_PATH)) + "/now/" + filename;
 
                 // for debug
@@ -1602,7 +1600,7 @@ void Logger::writeNowLive(int sec, int msec, bool boostMode) {
     }
 }
 
-void Logger::getNowLive(vector<Mat>& nowMats) {
+void Logger::getNowLive(vector<Mat> &nowMats) {
     nowMats.resize(numPages);
 
     for (int p = 0; p < numPages; p++) {
@@ -1613,20 +1611,20 @@ void Logger::getNowLive(vector<Mat>& nowMats) {
     std::fill(vchUpdated.begin(), vchUpdated.end(), false);
 }
 
-void Logger::deleteNowLive(int sec, bool boostMode) {   
+void Logger::deleteNowLive(int sec, bool boostMode) {
     int msec[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     for (int p = 0; p < numPages; p++) {
         int lastIdx = boostMode ? 10 : 5;
 
         for (int i = 0; i < lastIdx; i++) {
-            int firstDigit = ((sec + 60)- 6) % 60;
+            int firstDigit = ((sec + 60) - 6) % 60;
             int sencondDigit = i;
 
             string filename = std::format("{}p{:02d}{}.jpg", p, firstDigit, sencondDigit);
             string imgPath = normLogPath(string(CHIMGS_PATH)) + "/now/" + filename;
 
-             if (exists(imgPath))  // delete an old now directory
+            if (exists(imgPath))  // delete an old now directory
                 remove(imgPath);
         }
     }

@@ -69,9 +69,15 @@ class CameraStreamer {
                  int vchID);  // grab frame from ipcam stream
 
    public:
-    bool empty(int vchID) { return cmatsAll[vchID].empty(); }
-    bool tryPop(CMat &cmat, int vchID) { return cmatsAll[vchID].try_pop(cmat); }
-    int unsafeSize(int vchID) { return cmatsAll[vchID].unsafe_size(); }
+    bool empty(int vchID) {
+        return cmatsAll[vchID].empty();
+    }
+    bool tryPop(CMat &cmat, int vchID) {
+        return cmatsAll[vchID].try_pop(cmat);
+    }
+    int unsafeSize(int vchID) {
+        return cmatsAll[vchID].unsafe_size();
+    }
     int unsafeSizeMax() {
         int maxSize = 0;
         for (auto &cmats : cmatsAll)
@@ -79,7 +85,13 @@ class CameraStreamer {
 
         return maxSize;
     }
-    VideoWriter &operator[](int idx) { return videoWriters[idx]; }
-    void write(Mat &frame, int vchID) { videoWriters[vchID] << frame; }
-    int getPeriod(int vchID) { return sleepPeriods[vchID]; }
+    VideoWriter &operator[](int idx) {
+        return videoWriters[idx];
+    }
+    void write(Mat &frame, int vchID) {
+        videoWriters[vchID] << frame;
+    }
+    int getPeriod(int vchID) {
+        return sleepPeriods[vchID];
+    }
 };
