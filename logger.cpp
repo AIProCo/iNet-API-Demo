@@ -533,9 +533,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                         cntLine.direction = 1;  // vertical line -> use delta x
                                                 // and count L and R
 
-                    for (int g = 0; g < NUM_GENDERS; g++)
-                        for (int a = 0; a < NUM_AGE_GROUPS; a++)
-                            cntLine.totalUL[g][a] = cntLine.totalDR[g][a] = 0;
+                    cntLine.init();
 
                     bool duplicated = false;
                     for (auto &item : odRcd.cntLines) {
@@ -579,11 +577,9 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     }
 
                     if (abs(cntLine.pts[0].x - cntLine.pts[1].x) > abs(cntLine.pts[0].y - cntLine.pts[1].y))
-                        cntLine.direction = 0;  // horizontal line -> use delta
-                                                // y and count U and D
+                        cntLine.direction = 0;  // horizontal line -> use delta y and count U and D
                     else
-                        cntLine.direction = 1;  // vertical line -> use delta x
-                                                // and count L and R
+                        cntLine.direction = 1;  // vertical line -> use delta x and count L and R
 
                     for (auto &item : odRcd.cntLines) {
                         if (item.vchID == cntLine.vchID && item.clineID == cntLine.clineID) {
@@ -653,16 +649,16 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                         }
                     }
 
-                    for (int g = 0; g < NUM_GENDERS; g++)
-                        for (int a = 0; a < NUM_AGE_GROUPS; a++)
-                            zone.hitMap[g][a] = 0;
-
                     bool duplicated = false;
-                    for (auto &item : odRcd.zones)
+                    for (auto &item : odRcd.zones) {
                         if (item.vchID == zone.vchID && item.zoneID == zone.zoneID) {
                             duplicated = true;
                             break;
                         }
+                    }
+
+                    zone.state = 0;
+                    zone.init();
 
                     if (!duplicated) {
                         odRcd.zones.push_back(zone);
@@ -705,7 +701,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     }
 
                     for (auto &item : odRcd.zones) {
-                        if (item.vchID == zone.vchID && item.zoneID == zone.zoneID) {
+                        if (item.vchID == zone.vchID && item.zoneID == zone.zoneID && item.isMode == zone.isMode) {
                             std::copy(zone.pts.begin(), zone.pts.end(), item.pts.begin());
                             break;
                         }
@@ -799,10 +795,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ccZone.maxCC = 0;
                     ccZone.maxCCDay = 0;
 
-                    for (int i = 0; i < NUM_CC_LEVELS - 1; i++) {
-                        ccZone.accCCLevels[i] = 0;
-                        ccZone.accCCLevelsDay[i] = 0;
-                    }
+                    ccZone.init();
 
                     // init mask with empty Mat. This is generated in
                     // CrowdCounter::runModel.
@@ -954,14 +947,10 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     checkDirectories(numChannels);
 
                     for (auto &zone : odRcd.zones)
-                        for (int g = 0; g < NUM_GENDERS; g++)
-                            for (int a = 0; a < NUM_AGE_GROUPS; a++)
-                                zone.hitMap[g][a] = 0;
+                        zone.init();
 
                     for (auto &cntLine : odRcd.cntLines)
-                        for (int g = 0; g < NUM_GENDERS; g++)
-                            for (int a = 0; a < NUM_AGE_GROUPS; a++)
-                                cntLine.totalUL[g][a] = cntLine.totalDR[g][a] = 0;
+                        cntLine.init();
 
                     for (int i = 0; i < cfg.numChannels; i++) {
                         fdRcd.fireProbsMul[i].clear();
@@ -983,10 +972,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                         ccZone.maxCC = 0;
                         ccZone.maxCCDay = 0;
 
-                        for (int i = 0; i < NUM_CC_LEVELS - 1; i++) {
-                            ccZone.accCCLevels[i] = 0;
-                            ccZone.accCCLevelsDay[i] = 0;
-                        }
+                        ccZone.init();
                     }
 
                     break;
@@ -1198,8 +1184,7 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
             dayChanged = true;  // checked for all channels, but log is created
             // just once(see createLog())
 
-            newDate(cfg.numChannels,
-                    curTm);  // prepare a new directory for curTm
+            newDate(cfg.numChannels, curTm);  // prepare a new directory for curTm
 
             string filename = "day.txt";
             string txtPathCnt =
@@ -1222,11 +1207,8 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
 
                         writeCntLine(logFileCnt, &c);
 
-                        for (int i = 0; i < 2; i++)
-                            for (int j = 0; j < 3; j++) {
-                                c.totalUL[i][j] = c.totalDR[i][j] = 0;
-                                p.totalUL[i][j] = p.totalDR[i][j] = 0;
-                            }
+                        c.init();
+                        p.init();
                     }
 
                     for (int n = 0; n < odRcd.zones.size(); n++) {
@@ -1238,9 +1220,8 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
 
                         writeZone(logFileCnt, &c);
 
-                        for (int i = 0; i < 2; i++)
-                            for (int j = 0; j < 3; j++)
-                                c.hitMap[i][j] = p.hitMap[i][j] = 0;
+                        c.init();
+                        p.init();
                     }
                 }
 
@@ -1298,9 +1279,10 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
             for (int n = 0; n < odRcd.cntLines.size(); n++) {
                 CntLine &c = odRcd.cntLines[n];
 
-                if (c.vchID != vchID && c.isMode != IS_RESTRICTED_AREA)
+                if (c.vchID != vchID || c.isMode != IS_RESTRICTED_AREA)
                     continue;
 
+                // only for restricted-mode lines with vchID
                 int curTotal = 0;
                 for (int g = 0; g < NUM_GENDERS; g++)
                     for (int a = 0; a < NUM_AGE_GROUPS; a++)
@@ -1323,24 +1305,26 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
             for (int n = 0; n < odRcd.zones.size(); n++) {
                 Zone &z = odRcd.zones[n];
 
-                if (odRcd.zones[n].vchID != vchID && z.isMode != IS_RESTRICTED_AREA)
+                if (odRcd.zones[n].vchID != vchID || z.isMode != IS_RESTRICTED_AREA)
                     continue;
 
-                int curTotal = 0;
-                for (int g = 0; g < NUM_GENDERS; g++)
-                    for (int a = 0; a < NUM_AGE_GROUPS; a++)
-                        curTotal += z.curPeople[g][a];
+                // only for restricted-mode zones with vchID
+                int curTotal = z.getTotal();
 
-                if (z.preTotal == 0 && curTotal > 0) {
-                    ofstream logFileRet(txtPathRet, ios_base::app);
+                if (z.preTotal > 0 && curTotal > 0) {
+                    if (z.state == 0) {  // check 0, 1, 1
+                        ofstream logFileRet(txtPathRet, ios_base::app);
 
-                    if (logFileRet.is_open()) {
-                        writeZone(logFileRet, &z);
-                        logFileRet.close();
+                        if (logFileRet.is_open()) {
+                            writeZone(logFileRet, &z);
+                            logFileRet.close();
 
-                        saveImg = true;
+                            saveImg = true;
+                        }
                     }
-                }
+                    z.state = 2;
+                } else if (z.preTotal == 0 && curTotal == 0 && z.state > 0)  // check 0, 0, 0
+                    z.state--;
 
                 z.preTotal = curTotal;
             }

@@ -106,7 +106,6 @@
 #define AIPRO_PATH "c:/aipro/"
 #else
 #define AIPRO_PATH "aipro/"  // relative path to HOME directory,i.e, (home/<username>/aipro)
-
 #endif
 
 #define ROOT_PATH AIPRO_PATH "data/"
@@ -152,10 +151,27 @@ struct Zone {
 
     int isMode;    /// IS mode(0: people counting, 1: restricted area)
     int preTotal;  /// for internal usage in logger
+    int state;     /// for internal usage in logger(0: no people, 1: transition, 2: people)
 
     std::vector<cv::Point> pts;                  /// corner points (should be larger than 2)
     int curPeople[NUM_GENDERS][NUM_AGE_GROUPS];  /// current people in the zone
     int hitMap[NUM_GENDERS][NUM_AGE_GROUPS];     /// total people in the zone
+
+    void init() {
+        for (int g = 0; g < NUM_GENDERS; g++) {
+            for (int a = 0; a < NUM_AGE_GROUPS; a++) {
+                hitMap[g][a] = 0;
+                curPeople[g][a] = 0;
+            }
+        }
+    }
+    int getTotal() {
+        int total = 0;
+        for (int g = 0; g < NUM_GENDERS; g++)
+            for (int a = 0; a < NUM_AGE_GROUPS; a++)
+                total += curPeople[g][a];
+        return total;
+    }
 };
 
 struct CntLine {
@@ -170,6 +186,15 @@ struct CntLine {
     cv::Point pts[2];                          /// 2 end-points
     int totalUL[NUM_GENDERS][NUM_AGE_GROUPS];  // number of total object that move up or left
     int totalDR[NUM_GENDERS][NUM_AGE_GROUPS];  // number of total object that move down or right
+
+    void init() {
+        for (int g = 0; g < NUM_GENDERS; g++) {
+            for (int a = 0; a < NUM_AGE_GROUPS; a++) {
+                totalUL[g][a] = 0;
+                totalDR[g][a] = 0;
+            }
+        }
+    }
 };
 
 struct CCZone {
@@ -250,6 +275,12 @@ struct CCZone {
     std::deque<int> ccNums;
     double avgWindow;
 
+    void init() {
+        for (int i = 0; i < NUM_CC_LEVELS - 1; i++) {
+            accCCLevels[i] = 0;
+            accCCLevelsDay[i] = 0;
+        }
+    }
     void pushCCNum(int ccNum) {
         if (ccNums.size() <= 0)
             return;
