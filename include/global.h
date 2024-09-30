@@ -456,8 +456,7 @@ struct Config {
 
     // counting
     int debouncingTh;         /// debounce counting results over successive frames (suppress duplicated counting)
-    int lineEmphasizePeroid;  /// line emphasize peroid
-
+    
     // par config
     bool parEnable;            /// enable par
     bool parLightMode;         /// enable the light mode
