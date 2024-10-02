@@ -45,8 +45,8 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
 void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh);
 void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID);
 
-void doRunModelFD(Mat &frame, int vchID, uint frameCnt);
-void doRunModelCC(Mat &density, Mat &frame, int vchID);
+void doRunModelFD(FDRecord &fdRcd, Mat &frame, int vchID);
+void doRunModelCC(Mat &density, CCRecord &ccRcd, Mat &frame, int vchID);
 
 std::atomic<bool> ccTreadDone = false;
 std::atomic<bool> fdTreadDone = false;
@@ -58,12 +58,8 @@ int main() {
     FDRecord fdRcd;
     CCRecord ccRcd;
 
-    // Wrapping Logger
-    std::function<void(std::string)> lg = Logger::writeLog;
-    cfg.lg = lg;
-
     if (!parseConfigAPI(cfg, odRcd, fdRcd, ccRcd)) {  // parse config.json, cam.json, and is.txt
-        lg("parseConfigAPI: Parsing Error!\n");
+        cout << "parseConfigAPI: Parsing Error!\n";
         return -1;
     }
 
@@ -84,12 +80,13 @@ int main() {
     }
     int fdPeriod = fdMinPeriod, ccPeriod = ccMinPeriod;
 
-    if (!initModel(cfg, odRcd, fdRcd, ccRcd)) {
-        lg("initModel: Initialization of the solution failed!\n");
+    Logger logger(cfg);  // should be made before initModel and streamer
+
+    if (!initModel(cfg)) {
+        cout << "initModel: Initialization of the solution failed!\n";
         return -1;
     }
 
-    Logger logger(cfg, odRcd, fdRcd, ccRcd);  // should be made before streamer
     CameraStreamer streamer(cfg, odRcd, fdRcd, ccRcd, &logger);
 
     unsigned int frameCnt = 0;
@@ -127,7 +124,7 @@ int main() {
             frameCnt = cframe.frameCnt;
 
             if (!logger.checkCmd(cfg, odRcd, fdRcd, ccRcd)) {
-                lg("Break loop by checkCmdLogger\n");
+                cfg.lg("Break loop by checkCmdLogger\n");
                 break;
             }
 
@@ -161,7 +158,7 @@ int main() {
                     resize(frame, frameFD, Size(cfg.fdNetWidth, cfg.fdNetHeight));
                     threadStartFD = frameCnt;
                     vchIDFD = vchID;
-                    fdTh = new thread(doRunModelFD, ref(frameFD), vchID, frameCnt);
+                    fdTh = new thread(doRunModelFD, ref(fdRcd), ref(frameFD), vchID);
                 }
             }
 
@@ -193,12 +190,12 @@ int main() {
                     vchIDCC = vchID;
 #ifndef _CPU_INFER
                     resize(frame, frameCC, Size(cfg.ccNetWidth, cfg.ccNetHeight));
-                    ccTh = new thread(doRunModelCC, ref(density), ref(frameCC), vchID);
+                    ccTh = new thread(doRunModelCC, ref(density), ref(ccRcd), ref(frameCC), vchID);
 #else
                     for (CCZone &ccZone : ccRcd.ccZones) {
                         if (ccZone.vchID == vchID) {
                             ccZone.setCanvas(frame);
-                            ccTh = new thread(doRunModelCC, ref(density), ref(frameCC), vchID);
+                            ccTh = new thread(doRunModelCC, ref(density), ref(ccRcd), ref(frameCC), vchID);
                             break;
                         }
                     }
@@ -208,7 +205,7 @@ int main() {
 
             vector<DetBox> dboxes;
             if (cfg.odChannels[vchID])
-                runModel(dboxes, frame, vchID, frameCnt, cfg.odScoreTh);
+                runModel(dboxes, odRcd, frame, vchID, frameCnt, cfg.odScoreTh);
 
             end = chrono::steady_clock::now();
 
@@ -232,9 +229,9 @@ int main() {
             int inf = chrono::duration_cast<chrono::milliseconds>(end - start).count();
 
             if (frameCnt % 20 == 0)
-                lg(std::format("[{}]Frame{:>4}>  SP({:>2}, {:>3}), Gap(FD: {}, CC: {}),  Buf: {},  Inf: {}ms\n", vchID,
-                               frameCnt, sleepPeriodMain, streamer.unsafeSize(vchID), fdPeriod, ccPeriod,
-                               streamer.unsafeSize(vchID), inf));
+                cfg.lg(std::format("[{}]Frame{:>4}>  SP({:>2}, {:>3}), Gap(FD: {}, CC: {}),  Buf: {},  Inf: {}ms\n",
+                                   vchID, frameCnt, sleepPeriodMain, streamer.unsafeSize(vchID), fdPeriod, ccPeriod,
+                                   streamer.unsafeSize(vchID), inf));
 
             if (frameCnt > 10 && frameCnt < 100)  // skip the start frames and limit the number of elements
                 infs.push_back(inf);
@@ -252,7 +249,7 @@ int main() {
         }
 
         if (frameLimit > 0 && frameCnt > frameLimit) {
-            lg(std::format("\nBreak loop at frameCnt={:>4} and frameLimit={:>4}\n", frameCnt, frameLimit));
+            cfg.lg(std::format("\nBreak loop at frameCnt={:>4} and frameLimit={:>4}\n", frameCnt, frameLimit));
             break;
         }
     }
@@ -263,22 +260,23 @@ int main() {
     if (ccTh)
         ccTh->join();
 
+    if (infs.size() > 1) {
+        float avgInf = accumulate(infs.begin(), infs.end(), 0) / infs.size();
+        cfg.lg(std::format("\nAverage Inference Time: {}ms\n", avgInf));
+    }
+
+    if (cfg.recording) {
+        cfg.lg("\nOutput file(s):\n");
+        for (auto &outFile : cfg.outputFiles)
+            cfg.lg(std::format("  -{}\n", outFile));
+    }
+
     destroyModel();      // destroy all models
     logger.destroy();    // destroy logger
     streamer.destroy();  // destroy streamer
 
-    if (infs.size() > 1) {
-        float avgInf = accumulate(infs.begin(), infs.end(), 0) / infs.size();
-        lg(std::format("\nAverage Inference Time: {}ms\n", avgInf));
-    }
-
-    if (cfg.recording) {
-        lg("\nOutput file(s):\n");
-        for (auto &outFile : cfg.outputFiles)
-            lg(std::format("  -{}\n", outFile));
-    }
-
-    lg("\nTerminate program!\n");
+    cfg.lg("\nTerminate program!\n");
+    cfg.logFile.close();
 
     return 0;
 }
@@ -598,15 +596,15 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
     }
 }
 
-void doRunModelFD(Mat &frame, int vchID, uint frameCnt) {
-    runModelFD(frame, vchID, frameCnt);
+void doRunModelFD(FDRecord &fdRcd, Mat &frame, int vchID) {
+    runModelFD(fdRcd, frame, vchID);
     fdTreadDone = true;
 }
 
-void doRunModelCC(Mat &density, Mat &frame, int vchID) {
+void doRunModelCC(Mat &density, CCRecord &ccRcd, Mat &frame, int vchID) {
     // chrono::steady_clock::time_point start, end;
     // start = std::chrono::steady_clock::now();
-    runModelCC(density, frame, vchID);
+    runModelCC(density, ccRcd, frame, vchID);
     // end = std::chrono::steady_clock::now();
     // int inf = chrono::duration_cast<chrono::milliseconds>(end - start).count();
     // cout << " Crowd Counting Inference time: " << inf << "ms\n";

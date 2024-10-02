@@ -21,9 +21,7 @@ using namespace cv;
 using namespace std::filesystem;
 using namespace std::chrono;
 
-class Logger {
-    Config *pCfg;
-
+class Logger : public DebugMessage {
     bool logEnable;
     bool debugMode;
     bool writeLive;             // for internal usage
@@ -32,7 +30,6 @@ class Logger {
 
     vector<tm> preTms;
     vector<Mat> canvases;
-    ODRecord preOdRcd;
 
     vector<int> vchStatesPre;  /// vch states (0: non-connected, 1: connected)
     vector<int> maxFireProbs, maxSmokeProbs, accNumFires, accNumSmokes;
@@ -69,15 +66,8 @@ class Logger {
     string getNowZone(Zone *c);
 
    public:
-    Logger(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
+    Logger(Config &cfg);
     ~Logger();
-
-    static std::ofstream logFile;
-    static void writeLog(string msg) {
-        // cout << ".";
-        cout << msg;
-        logFile << msg;
-    }
 
     void writeChInfo();
 
@@ -88,8 +78,8 @@ class Logger {
                    int vchID, system_clock::time_point now);
     void destroy();
 
-    void getNowLive(vector<Mat> &nowMats);
-    void getNowOD(vector<string> &nowOD);
-    void getNowFD(vector<string> &nowFD);
-    void getNowCC(vector<string> &nowCC);
+    // void getNowLive(vector<Mat>& nowMats);
+    // void getNowOD(vector<string>& nowOD);
+    // void getNowFD(vector<string>& nowFD);
+    // void getNowCC(vector<string>& nowCC);
 };

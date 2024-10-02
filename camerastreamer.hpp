@@ -18,9 +18,8 @@
 using namespace std;
 using namespace cv;
 
-class CameraStreamer {
+class CameraStreamer : public DebugMessage {
    public:
-    Config *pCfg;
     ODRecord *pOdRcd;
     FDRecord *pFdRcd;
     CCRecord *pCcRcd;
@@ -40,8 +39,6 @@ class CameraStreamer {
     vector<CMats> cmatsAll;
     vector<VideoWriter> videoWriters;
 
-    std::function<void(std::string)> lg;  // for writing log
-
     std::vector<std::thread *> cameraThreads;  // thread that run camera capture process
     CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd, Logger *_pLogger);
     ~CameraStreamer();
@@ -49,6 +46,10 @@ class CameraStreamer {
     void destroy();  // explicit destroy function. (cuz destructor is called randomly)
 
    private:
+    /*void lg(std::string msg) {
+        pCfg->lg(msg);
+    }*/
+
     /// <summary>
     /// If ip camera is disconnected, try to reconnect in 5sec.<para/>
     /// Trial to reconnect fail -> wait for 30 sec to try again
@@ -65,8 +66,7 @@ class CameraStreamer {
     /// <param name="index">: ipcamera index</param>
     /// <param name="input_q">: concurrent queue store original frames from ip
     /// cam</param> <returns>boolean result of grab frame</returns>
-    bool working(cv::VideoCapture *capture,
-                 int vchID);  // grab frame from ipcam stream
+    bool working(cv::VideoCapture *capture, int vchID);  // grab frame from ipcam stream
 
    public:
     bool empty(int vchID) {

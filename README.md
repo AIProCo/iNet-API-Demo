@@ -32,8 +32,8 @@
 ### **Download and extract files**
 - Download and upzip one of the followings zip files. Then, copy and paste bin, inputs, and videos directories to the solution directory (the directory including the `.sln` file):
   + Cuda compute capability of your GPU should be 8.6(RTX-30xx) or 8.9(RTX-40xx): 
-    - RTX-30xx: https://drive.google.com/file/d/1Cj_CPZQ02rOgGo_gNRmBkXZw6VnntLnu/view?usp=sharing
-    - RTX-40xx: https://drive.google.com/file/d/1R7J0dbhf5qF3cgiTTLzuwch2Rk_REOl3/view?usp=sharing
+    - RTX-30xx: https://drive.google.com/file/d/1BMSuX3T0Y6nMI6pvWnAfGdmLtDR2NV8q/view?usp=sharing
+    - RTX-40xx: https://drive.google.com/file/d/1CogRPPAQiTE8_9_ellvct4i0jDw25YUC/view?usp=sharing
     
 ### **Run the project**
 

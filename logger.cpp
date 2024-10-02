@@ -7,15 +7,10 @@
 
 #include "util.h"
 
-std::ofstream Logger::logFile;
-
-Logger::Logger(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
-    pCfg = &cfg;
-
+Logger::Logger(Config &cfg) : DebugMessage(cfg) {
     logEnable = cfg.logEnable;
     numChannels = cfg.numChannels;
     numPages = ((numChannels - 1) / 9) + 1;  // 9 channels are displayed in one channel
-    preOdRcd = odRcd;
     debugMode = cfg.debugMode;
     targetLiveChannel = -1;
 
@@ -55,7 +50,7 @@ Logger::Logger(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
     // for debug
     writeLive = false;
     if (writeLive) {
-        writeLog("<Write live_debug video>\n");
+        lg("<Write live_debug video>\n");
         double fps;
 
         if (cfg.boostMode)
@@ -73,9 +68,6 @@ Logger::~Logger() {
 }
 
 void Logger::destroy() {
-    if (logFile.is_open())
-        logFile.close();
-
     // for debug
     if (writeLive)
         writer.release();
@@ -158,7 +150,7 @@ void Logger::newDate(int numChannels, tm *inputTm) {
     strftime(buf, sizeof(buf), "%Y%m%d", curTm);
     string dayInfo = string(buf);
 
-    // writeLog(std::format("New Date: {}", dayInfo));
+    // lg(std::format("New Date: {}", dayInfo));
 
     vector<string> targetDirs = {normLogPath(CNT_PATH), normLogPath(FD_PATH), normLogPath(CC_PATH)};
     int curABTime = toABTime(dayInfo);
@@ -199,7 +191,7 @@ void Logger::newDate(int numChannels, tm *inputTm) {
             string dirName = item.path().filename().string();
 
             if (dirName.length() != 8) {
-                writeLog(std::format("Directory name error. Delete this: {}\n", dirName));
+                lg(std::format("Directory name error. Delete this: {}\n", dirName));
                 remove_all(item);
                 continue;
             }
@@ -207,7 +199,7 @@ void Logger::newDate(int numChannels, tm *inputTm) {
             int dirABTime = toABTime(dirName);
 
             if ((curABTime - dirABTime) > 31) {
-                writeLog(std::format("Remove: {}\n", item.path().string()));
+                lg(std::format("Remove: {}\n", item.path().string()));
                 remove_all(item);
             }
         }
@@ -218,7 +210,7 @@ void Logger::newDate(int numChannels, tm *inputTm) {
         string filename = item.path().filename().string();  // with ".txt extension"
 
         if (filename.length() != 12) {
-            writeLog(std::format("Log file name error. Delete this: {}\n", filename));
+            lg(std::format("Log file name error. Delete this: {}\n", filename));
             remove(item);
             continue;
         }
@@ -228,7 +220,7 @@ void Logger::newDate(int numChannels, tm *inputTm) {
         int dirABTime = toABTime(filename);
 
         if ((curABTime - dirABTime) > 31) {
-            writeLog(std::format("Remove: {}.txt\n", filename));
+            lg(std::format("Remove: {}.txt\n", filename));
             remove(item);
         }
     }
@@ -299,8 +291,8 @@ void Logger::writeIS(Config &cfg, ODRecord &odRcd, CCRecord &ccRcd) {
     string txtPathIS = normLogPath(string(CONFIG_PATH)) + "/" + filenameIS;
 
     ofstream is(txtPathIS);
-    writeLog(std::format("writeIS: Line = {}, Zone = {}, CZone = {}\n", odRcd.cntLines.size(), odRcd.zones.size(),
-                         ccRcd.ccZones.size()));
+    lg(std::format("writeIS: Line = {}, Zone = {}, CZone = {}\n", odRcd.cntLines.size(), odRcd.zones.size(),
+                   ccRcd.ccZones.size()));
 
     if (is.is_open()) {
         for (auto &cntLine : odRcd.cntLines) {
@@ -358,7 +350,7 @@ void Logger::writeChInfo() {  // called in CameraStreamer
     string txtPath = normLogPath(string(CONFIG_PATH)) + "/" + filename;
 
     ofstream chInfo(txtPath);
-    writeLog(std::format("writeChInfo: numChannels = {}\n", pCfg->numChannels));
+    lg(std::format("writeChInfo: numChannels = {}\n", pCfg->numChannels));
 
     if (chInfo.is_open()) {
         for (int c = 0; c < pCfg->numChannels; c++) {
@@ -373,13 +365,6 @@ void Logger::writeChInfo() {  // called in CameraStreamer
 }
 
 void Logger::writeCntLine(ofstream &f, CntLine *c, CntLine *p) {
-    /*if (p)
-        if (p->totalUL[0][0] == 0 && p->totalUL[0][1] == 0 && p->totalUL[0][2]
-       == 0 && p->totalUL[1][0] == 0 && p->totalUL[1][1] == 0 &&
-       p->totalUL[1][2] == 0 && p->totalDR[0][0] == 0 && p->totalDR[0][1] == 0
-       && p->totalDR[0][2] == 0 && p->totalDR[1][0] == 0 && p->totalDR[1][1] ==
-       0 && p->totalDR[1][2] == 0) f << "inited\n";*/
-
     f << 0 << " " << c->clineID << " " << c->isMode << " ";
     for (int i = 0; i < NUM_GENDERS; i++)
         for (int j = 0; j < NUM_AGE_GROUPS; j++)
@@ -407,11 +392,6 @@ string Logger::getNowCntLine(CntLine *c) {
 }
 
 void Logger::writeZone(ofstream &f, Zone *c, Zone *p) {
-    /*if (p)
-        if (p->hitMap[0][0] == 0 && p->hitMap[0][1] == 0 && p->hitMap[0][2] == 0
-       && p->hitMap[1][0] == 0 && p->hitMap[1][1] == 0 && p->hitMap[1][2] == 0)
-            f << "inited\n";*/
-
     f << 1 << " " << c->zoneID << " " << c->isMode << " ";
     for (int i = 0; i < NUM_GENDERS; i++)
         for (int j = 0; j < NUM_AGE_GROUPS; j++)
@@ -439,7 +419,7 @@ string Logger::getNowZone(Zone *c) {
 bool Logger::createLog() {
     static string curLogFilepath;
 
-    // create a log file
+    // get the current time
     system_clock::time_point now = system_clock::now();
     time_t nowt = system_clock::to_time_t(now);
     tm *curTm = localtime(&nowt);
@@ -457,17 +437,17 @@ bool Logger::createLog() {
     if (curLogFilepath == newLogFilepath)
         return true;  // already created
 
-    if (logFile.is_open())
-        logFile.close();
+    if (pCfg->logFile.is_open())
+        pCfg->logFile.close();
 
-    logFile.open(newLogFilepath, ios_base::app);
+    pCfg->logFile.open(newLogFilepath, ios_base::app);
 
-    if (!logFile.is_open()) {
+    if (!pCfg->logFile.is_open()) {
         cout << "Log file error:" << newLogFilepath << endl;
         return false;
     }
 
-    writeLog(std::format("\nStart logging {} at {} ------------------------\n", newLogFilepath, timeInfo));
+    pCfg->lg(std::format("\nStart logging {} at {} ------------------------\n", newLogFilepath, timeInfo));
     curLogFilepath = newLogFilepath;
 
     return true;
@@ -496,7 +476,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
             stringstream ss(line);
 
             ss >> cmd;
-            writeLog(std::format("Get cmd: {}\n", line));
+            lg(std::format("Get cmd: {}\n", line));
 
             switch (cmd) {
                 case CMD_INSERT_LINE: {
@@ -516,13 +496,13 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     if (cntLine.pts[0].x < 0 || cntLine.pts[0].x >= fW || cntLine.pts[1].x < 0 ||
                         cntLine.pts[1].x >= fW) {
-                        writeLog(std::format("cntLine.pts.x error: {} {} {}", cntLine.pts[0].x, cntLine.pts[1].x, fW));
+                        lg(std::format("cntLine.pts.x error: {} {} {}", cntLine.pts[0].x, cntLine.pts[1].x, fW));
                         return false;
                     }
 
                     if (cntLine.pts[0].y < 0 || cntLine.pts[0].y >= fH || cntLine.pts[1].y < 0 ||
                         cntLine.pts[1].y >= fH) {
-                        writeLog(std::format("cntLine.pts.y error: {} {} {}", cntLine.pts[0].y, cntLine.pts[1].y, fH));
+                        lg(std::format("cntLine.pts.y error: {} {} {}", cntLine.pts[0].y, cntLine.pts[1].y, fH));
                         return false;
                     }
 
@@ -545,7 +525,6 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     if (!duplicated) {
                         odRcd.cntLines.push_back(cntLine);
-                        preOdRcd.cntLines.push_back(cntLine);
                     }
                     break;
                 }
@@ -566,13 +545,13 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     if (cntLine.pts[0].x < 0 || cntLine.pts[0].x >= fW || cntLine.pts[1].x < 0 ||
                         cntLine.pts[1].x >= fW) {
-                        writeLog(std::format("cntLine.pts.x error: {} {} {}", cntLine.pts[0].x, cntLine.pts[1].x, fW));
+                        lg(std::format("cntLine.pts.x error: {} {} {}", cntLine.pts[0].x, cntLine.pts[1].x, fW));
                         return false;
                     }
 
                     if (cntLine.pts[0].y < 0 || cntLine.pts[0].y >= fH || cntLine.pts[1].y < 0 ||
                         cntLine.pts[1].y >= fH) {
-                        writeLog(std::format("cntLine.pts.y error: {} {} {}", cntLine.pts[0].y, cntLine.pts[1].y, fH));
+                        lg(std::format("cntLine.pts.y error: {} {} {}", cntLine.pts[0].y, cntLine.pts[1].y, fH));
                         return false;
                     }
 
@@ -597,7 +576,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> vchID;
 
                     if (vchID >= cfg.numChannels) {
-                        writeLog(std::format("vchID error in remove line: {} {}", vchID, cfg.numChannels));
+                        lg(std::format("vchID error in remove line: {} {}", vchID, cfg.numChannels));
                         return false;
                     }
 
@@ -608,12 +587,6 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                             ++itr;
                     }
 
-                    for (auto itr = preOdRcd.cntLines.begin(); itr != preOdRcd.cntLines.end();) {
-                        if (itr->clineID == cLineID && itr->vchID == vchID)
-                            itr = preOdRcd.cntLines.erase(itr);
-                        else
-                            ++itr;
-                    }
                     break;
                 }
                 case CMD_INSERT_ZONE: {
@@ -625,7 +598,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> zone.isMode;
 
                     if (zone.vchID >= cfg.numChannels) {
-                        writeLog(std::format("zone.vchID error: {} {}", zone.vchID, cfg.numChannels));
+                        lg(std::format("zone.vchID error: {} {}", zone.vchID, cfg.numChannels));
                         return false;
                     }
 
@@ -639,12 +612,12 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                         zone.pts.push_back(pt);
 
                         if (pt.x < 0 || pt.x >= fW) {
-                            writeLog(std::format("zone.pts.x error: {} {}", pt.x, fW));
+                            lg(std::format("zone.pts.x error: {} {}", pt.x, fW));
                             return false;
                         }
 
                         if (pt.y < 0 || pt.y >= fH) {
-                            writeLog(std::format("zone.pts.y error: {} {}", pt.y, fH));
+                            lg(std::format("zone.pts.y error: {} {}", pt.y, fH));
                             return false;
                         }
                     }
@@ -662,7 +635,6 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     if (!duplicated) {
                         odRcd.zones.push_back(zone);
-                        preOdRcd.zones.push_back(zone);
                     }
 
                     break;
@@ -676,7 +648,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> zone.isMode;
 
                     if (zone.vchID >= cfg.numChannels) {
-                        writeLog(std::format("zone.vchID error: {} {}\n", zone.vchID, cfg.numChannels));
+                        lg(std::format("zone.vchID error: {} {}\n", zone.vchID, cfg.numChannels));
                         return false;
                     }
 
@@ -690,12 +662,12 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                         zone.pts.push_back(pt);
 
                         if (pt.x < 0 || pt.x >= fW) {
-                            writeLog(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
+                            lg(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
                             return false;
                         }
 
                         if (pt.y < 0 || pt.y >= fH) {
-                            writeLog(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
+                            lg(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
                             return false;
                         }
                     }
@@ -714,20 +686,13 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> vchID;
 
                     if (vchID >= cfg.numChannels) {
-                        writeLog(std::format("vchID error in remove zone: {} {}", vchID, cfg.numChannels));
+                        lg(std::format("vchID error in remove zone: {} {}", vchID, cfg.numChannels));
                         return false;
                     }
 
                     for (auto itr = odRcd.zones.begin(); itr != odRcd.zones.end();) {
                         if (itr->zoneID == zoneID && itr->vchID == vchID)
                             itr = odRcd.zones.erase(itr);
-                        else
-                            ++itr;
-                    }
-
-                    for (auto itr = preOdRcd.zones.begin(); itr != preOdRcd.zones.end();) {
-                        if (itr->zoneID == zoneID && itr->vchID == vchID)
-                            itr = preOdRcd.zones.erase(itr);
                         else
                             ++itr;
                     }
@@ -744,7 +709,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> ccZone.vchID;
 
                     if (ccZone.vchID >= cfg.numChannels) {
-                        writeLog(std::format("ccZone.vchID error: {} {}\n", ccZone.vchID, cfg.numChannels));
+                        lg(std::format("ccZone.vchID error: {} {}\n", ccZone.vchID, cfg.numChannels));
                         return false;
                     }
 #ifdef _CPU_INFER
@@ -771,12 +736,12 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                         ccZone.pts.push_back(pt);
 
                         if (pt.x < 0 || pt.x >= fW) {
-                            writeLog(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
+                            lg(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
                             return false;
                         }
 
                         if (pt.y < 0 || pt.y >= fH) {
-                            writeLog(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
+                            lg(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
                             return false;
                         }
                     }
@@ -829,7 +794,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> ccZone.vchID;
 
                     if (ccZone.vchID >= cfg.numChannels) {
-                        writeLog(std::format("ccZone.vchID error: {} {}\n", ccZone.vchID, cfg.numChannels));
+                        lg(std::format("ccZone.vchID error: {} {}\n", ccZone.vchID, cfg.numChannels));
                         return false;
                     }
 
@@ -843,12 +808,12 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                         ccZone.pts.push_back(pt);
 
                         if (pt.x < 0 || pt.x >= fW) {
-                            writeLog(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
+                            lg(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
                             return false;
                         }
 
                         if (pt.y < 0 || pt.y >= fH) {
-                            writeLog(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
+                            lg(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
                             return false;
                         }
                     }
@@ -881,7 +846,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> vchID;
 
                     if (vchID >= cfg.numChannels) {
-                        writeLog(std::format("vchID error in remove cczone: {} {}\n", vchID, cfg.numChannels));
+                        lg(std::format("vchID error in remove cczone: {} {}\n", vchID, cfg.numChannels));
                         return false;
                     }
 
@@ -901,7 +866,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> fdScoreTh;
 
                     if (odScoreTh >= 1000 || fdScoreTh >= 1000) {
-                        writeLog(std::format("ScoreThs error: {} {}", odScoreTh, fdScoreTh));
+                        lg(std::format("ScoreThs error: {} {}", odScoreTh, fdScoreTh));
                         return false;
                     }
 
@@ -914,7 +879,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> targetLiveChannel;
 
                     if (targetLiveChannel < 0 || targetLiveChannel >= numChannels) {
-                        writeLog(std::format("targetLiveChannel error: {} {}", targetLiveChannel, numChannels));
+                        lg(std::format("targetLiveChannel error: {} {}", targetLiveChannel, numChannels));
                         return false;
                     }
 
@@ -1028,14 +993,14 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
 
         if (logFileCmde2s.is_open()) {
             logFileCmde2s << "0 " << numChannels;
-            writeLog("0 ");
+            lg("0 ");
 
             for (int &state : vchStatesPre) {
                 logFileCmde2s << " " << state;
-                writeLog(std::format(" {}", state));
+                lg(std::format(" {}", state));
             }
 
-            writeLog(" <= Write cmde2s.txt\n");
+            lg(" <= Write cmde2s.txt\n");
             logFileCmde2s.close();
         }
     }
@@ -1106,10 +1071,7 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
                         continue;
 
                     auto &c = odRcd.cntLines[n];
-                    auto &p = preOdRcd.cntLines[n];
-
-                    writeCntLine(logFileCnt, &c, &p);
-                    p = c;
+                    writeCntLine(logFileCnt, &c);
                 }
 
                 for (int n = 0; n < odRcd.zones.size(); n++) {
@@ -1117,10 +1079,7 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
                         continue;
 
                     auto &c = odRcd.zones[n];
-                    auto &p = preOdRcd.zones[n];
-
-                    writeZone(logFileCnt, &c, &p);
-                    p = c;
+                    writeZone(logFileCnt, &c);
                 }
             }
 
@@ -1203,12 +1162,9 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
                             continue;
 
                         auto &c = odRcd.cntLines[n];
-                        auto &p = preOdRcd.cntLines[n];
-
                         writeCntLine(logFileCnt, &c);
 
                         c.init();
-                        p.init();
                     }
 
                     for (int n = 0; n < odRcd.zones.size(); n++) {
@@ -1216,12 +1172,9 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
                             continue;
 
                         auto &c = odRcd.zones[n];
-                        auto &p = preOdRcd.zones[n];
-
                         writeZone(logFileCnt, &c);
 
                         c.init();
-                        p.init();
                     }
                 }
 
@@ -1474,21 +1427,21 @@ void Logger::writeNowOD(ODRecord &odRcd, int vchID, string dayInfo, int sec) {
     }
 }
 
-void Logger::getNowOD(vector<string> &nowOD) {
-    ODRecord *pOdRcd = pCfg->pOdRcd;
-
-    for (int n = 0; n < pOdRcd->cntLines.size(); n++) {
-        CntLine &c = pOdRcd->cntLines[n];
-        string text = getNowCntLine(&c);
-        nowOD.push_back(text);
-    }
-
-    for (int n = 0; n < pOdRcd->zones.size(); n++) {
-        Zone &z = pOdRcd->zones[n];
-        string text = getNowZone(&z);
-        nowOD.push_back(text);
-    }
-}
+// void Logger::getNowOD(vector<string>& nowOD) {
+//    ODRecord* pOdRcd = pCfg->pOdRcd;
+//
+//    for (int n = 0; n < pOdRcd->cntLines.size(); n++) {
+//        CntLine& c = pOdRcd->cntLines[n];
+//        string text = getNowCntLine(&c);
+//        nowOD.push_back(text);
+//    }
+//
+//    for (int n = 0; n < pOdRcd->zones.size(); n++) {
+//        Zone& z = pOdRcd->zones[n];
+//        string text = getNowZone(&z);
+//        nowOD.push_back(text);
+//    }
+//}
 
 void Logger::writeNowFD(int vchID, string dayInfo, int sec) {
     string filenameFDNow = std::format("{}.txt", sec % 10);
@@ -1505,13 +1458,14 @@ void Logger::writeNowFD(int vchID, string dayInfo, int sec) {
     }
 }
 
-void Logger::getNowFD(vector<string> &nowFD) {
-    for (int vchID = 0; vchID < numChannels; vchID++) {
-        string text = std::format("{} {} {} {} {}\n", vchID, accNumFires[vchID], accNumSmokes[vchID],
-                                  maxFireProbs[vchID], maxSmokeProbs[vchID]);
-        nowFD.push_back(text);
-    }
-}
+// void Logger::getNowFD(vector<string>& nowFD) {
+//    for (int vchID = 0; vchID < numChannels; vchID++) {
+//        string text = std::format("{} {} {} {} {}\n", vchID, accNumFires[vchID], accNumSmokes[vchID],
+//        maxFireProbs[vchID],
+//            maxSmokeProbs[vchID]);
+//        nowFD.push_back(text);
+//    }
+//}
 
 void Logger::writeNowCC(CCRecord &ccRcd, int vchID, string dayInfo, int sec) {
     string filenameCCNow = std::format("{}.txt", sec % 10);
@@ -1536,18 +1490,19 @@ void Logger::writeNowCC(CCRecord &ccRcd, int vchID, string dayInfo, int sec) {
     }
 }
 
-void Logger::getNowCC(vector<string> &nowCC) {
-    CCRecord *pCcRcd = pCfg->pCcRcd;
-
-    for (CCZone &ccZone : pCcRcd->ccZones) {
-        int curCCNum = ccZone.ccNums.back();
-
-        string text = std::format("{} {} {} {} {} {} {} {}\n", ccZone.ccZoneID, ccZone.vchID, curCCNum, ccZone.maxCC,
-                                  ccZone.ccLevel, ccZone.accCCLevels[0], ccZone.accCCLevels[1], ccZone.accCCLevels[2]);
-
-        nowCC.push_back(text);
-    }
-}
+// void Logger::getNowCC(vector<string>& nowCC) {
+//    CCRecord* pCcRcd = pCfg->pCcRcd;
+//
+//    for (CCZone& ccZone : pCcRcd->ccZones) {
+//        int curCCNum = ccZone.ccNums.back();
+//
+//        string text = std::format("{} {} {} {} {} {} {} {}\n", ccZone.ccZoneID, ccZone.vchID, curCCNum, ccZone.maxCC,
+//        ccZone.ccLevel, ccZone.accCCLevels[0],
+//            ccZone.accCCLevels[1], ccZone.accCCLevels[2]);
+//
+//        nowCC.push_back(text);
+//    }
+//}
 
 void Logger::writeNowLive(int sec, int msec, bool boostMode) {
     for (int p = 0; p < numPages; p++) {
@@ -1584,16 +1539,16 @@ void Logger::writeNowLive(int sec, int msec, bool boostMode) {
     }
 }
 
-void Logger::getNowLive(vector<Mat> &nowMats) {
-    nowMats.resize(numPages);
-
-    for (int p = 0; p < numPages; p++) {
-        canvases[p].copyTo(nowMats[p]);
-        pageUpdated[p] = false;
-    }
-
-    std::fill(vchUpdated.begin(), vchUpdated.end(), false);
-}
+// void Logger::getNowLive(vector<Mat>& nowMats) {
+//    nowMats.resize(numPages);
+//
+//    for (int p = 0; p < numPages; p++) {
+//        canvases[p].copyTo(nowMats[p]);
+//        pageUpdated[p] = false;
+//    }
+//
+//    std::fill(vchUpdated.begin(), vchUpdated.end(), false);
+//}
 
 void Logger::deleteNowLive(int sec, bool boostMode) {
     int msec[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};

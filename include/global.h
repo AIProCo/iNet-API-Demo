@@ -4,6 +4,7 @@
 =============================================================================*/
 #pragma once
 
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -399,9 +400,17 @@ struct DetBox {
 };
 
 struct Config {
-    ODRecord *pOdRcd;
-    FDRecord *pFdRcd;
-    CCRecord *pCcRcd;
+    // for logger. logFile and lg can be used after creating Logger
+    std::ofstream logFile;
+
+    void lg(std::string msg) {
+        std::cout << msg;
+        logFile << msg;
+    }
+
+    // ODRecord *pOdRcd;
+    // FDRecord *pFdRcd;
+    // CCRecord *pCcRcd;
 
     std::string key;                       /// authorization Key
     uint frameLimit;                       /// number of frames to be processed
@@ -431,7 +440,8 @@ struct Config {
     float odScoreTh;  /// threshold for filtering low confident detections
     int odBatchSize;  /// batch size of the od model
     std::vector<std::string> odIDMapping;
-    int numClasses;                /// number of classes
+    int numClasses;  /// number of classes
+
     std::vector<bool> odChannels;  /// flags for indicating object detection channels
     std::vector<bool> fdChannels;  /// flags for indicating fire detection channels
     std::vector<bool> ccChannels;  /// flags for indicating crowd counting channels
@@ -455,8 +465,8 @@ struct Config {
     float noMoveTh;        /// threshold for checking no movement objects
 
     // counting
-    int debouncingTh;         /// debounce counting results over successive frames (suppress duplicated counting)
-    
+    int debouncingTh;  /// debounce counting results over successive frames (suppress duplicated counting)
+
     // par config
     bool parEnable;            /// enable par
     bool parLightMode;         /// enable the light mode
@@ -475,8 +485,18 @@ struct Config {
     std::string ccModelFile;  /// crowd counting model file
     int ccWindowSize;
     int ccPeriod;  /// fire detection period
+};
 
-    std::function<void(std::string)> lg;
+class DebugMessage {
+   public:
+    Config *pCfg;
+
+    DebugMessage(Config &cfg) {
+        pCfg = &cfg;
+    }
+    void lg(std::string msg) {
+        pCfg->lg(msg);
+    }
 };
 
 class CMat {

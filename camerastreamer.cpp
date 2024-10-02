@@ -5,14 +5,12 @@
 #include "opencv2/opencv.hpp"
 //#include "util.h"
 
-CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd, Logger *_pLogger) {
-    pCfg = &cfg;
+CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd, Logger *_pLogger)
+    : DebugMessage(cfg) {
     pOdRcd = &odRcd;
     pFdRcd = &fdRcd;
     pCcRcd = &ccRcd;
     pLogger = _pLogger;
-
-    lg = cfg.lg;
 
     numChannels = cfg.numChannels;
     maxBufferSize = cfg.maxBufferSize;
