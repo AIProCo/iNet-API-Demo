@@ -401,16 +401,12 @@ struct DetBox {
 
 struct Config {
     // for logger. logFile and lg can be used after creating Logger
-    std::ofstream logFile;
-
+    std::ofstream *pLogFile;
     void lg(std::string msg) {
         std::cout << msg;
-        logFile << msg;
+        if (pLogFile != NULL)
+            (*pLogFile) << msg;
     }
-
-    // ODRecord *pOdRcd;
-    // FDRecord *pFdRcd;
-    // CCRecord *pCcRcd;
 
     std::string key;                       /// authorization Key
     uint frameLimit;                       /// number of frames to be processed

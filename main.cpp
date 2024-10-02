@@ -276,7 +276,8 @@ int main() {
     streamer.destroy();  // destroy streamer
 
     cfg.lg("\nTerminate program!\n");
-    cfg.logFile.close();
+    if (cfg.pLogFile && cfg.pLogFile->is_open())
+        cfg.pLogFile->close();
 
     return 0;
 }

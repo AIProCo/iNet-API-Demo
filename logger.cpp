@@ -437,12 +437,17 @@ bool Logger::createLog() {
     if (curLogFilepath == newLogFilepath)
         return true;  // already created
 
-    if (pCfg->logFile.is_open())
-        pCfg->logFile.close();
+    if (pCfg->pLogFile) {
+        if (pCfg->pLogFile->is_open())
+            pCfg->pLogFile->close();
 
-    pCfg->logFile.open(newLogFilepath, ios_base::app);
+        pCfg->pLogFile = NULL;
+    }
 
-    if (!pCfg->logFile.is_open()) {
+    pCfg->pLogFile = new ofstream(newLogFilepath, ios_base::app);
+    // pCfg->logFile.open(newLogFilepath, ios_base::app);
+
+    if (!pCfg->pLogFile->is_open()) {
         cout << "Log file error:" << newLogFilepath << endl;
         return false;
     }
