@@ -30,10 +30,10 @@
 #define DRAW_DETECTION_INFO true
 #define DRAW_FIRE_DETECTION true
 #define DRAW_FIRE_DETECTION_COUNTING true
-#define DRAW_CNTLINE false
-#define DRAW_CNTLINE_COUNTING false
-#define DRAW_ZONE false
-#define DRAW_ZONE_COUNTING false
+#define DRAW_CNTLINE true
+#define DRAW_CNTLINE_COUNTING true
+#define DRAW_ZONE true
+#define DRAW_ZONE_COUNTING true
 #define DRAW_CC true
 #define DRAW_CC_COUNTING true
 
@@ -54,13 +54,17 @@ std::atomic<bool> fdTreadDone = false;
 // start engine
 int main() {
     Config cfg;
-    ODRecord odRcd;
-    FDRecord fdRcd;
-    CCRecord ccRcd;
+    vector<ODRecord> odRcds;  // for each vchID
+    vector<FDRecord> fdRcds;  // for each vchID
+    vector<CCRecord> ccRcds;  // for each vchID
 
-    if (!parseConfigAPI(cfg, odRcd, fdRcd, ccRcd)) {  // parse config.json, cam.json, and is.txt
-        cout << "parseConfigAPI: Parsing Error!\n";
-        return -1;
+    try {
+        if (!parseConfigAPI(cfg, odRcds, fdRcds, ccRcds)) {  // parse config.json, cam.json, and is.txt
+            cout << "parseConfigAPI: Parsing Error!\n";
+            return -1;
+        }
+    } catch (const std::exception &e) {
+        cout << e.what() << endl;
     }
 
     int numFDChannels = 0, numCCChannels = 0;
@@ -87,13 +91,13 @@ int main() {
         return -1;
     }
 
-    CameraStreamer streamer(cfg, odRcd, fdRcd, ccRcd, &logger);
+    CameraStreamer streamer(cfg, odRcds, ccRcds, &logger);
 
     unsigned int frameCnt = 0;
     unsigned int frameLimit = cfg.frameLimit;  // number of frames to be processed
     int vchIDFD = -1, vchIDCC = -1;
 
-    chrono::steady_clock::time_point start, end;
+    steady_clock::time_point start, end;
     vector<int> infs;
     int sleepPeriodMain = 0;
     vector<unsigned int> threadStartFDs(cfg.numChannels, 0);
@@ -123,15 +127,14 @@ int main() {
             int vchID = cframe.vchID;
             frameCnt = cframe.frameCnt;
 
-            if (!logger.checkCmd(cfg, odRcd, fdRcd, ccRcd)) {
+            if (!logger.checkCmd(cfg, odRcds[vchID], fdRcds[vchID], ccRcds[vchID])) {
                 cfg.lg("Break loop by checkCmdLogger\n");
                 break;
             }
 
-            system_clock::time_point now = system_clock::now();
             int ccNumFrame = 0;
-
-            start = std::chrono::steady_clock::now();
+            system_clock::time_point now = system_clock::now();
+            start = steady_clock::now();
 
             if (cfg.fdChannels[vchID]) {
                 unsigned int &threadStartFD = threadStartFDs[vchID];
@@ -158,7 +161,7 @@ int main() {
                     resize(frame, frameFD, Size(cfg.fdNetWidth, cfg.fdNetHeight));
                     threadStartFD = frameCnt;
                     vchIDFD = vchID;
-                    fdTh = new thread(doRunModelFD, ref(fdRcd), ref(frameFD), vchID);
+                    fdTh = new thread(doRunModelFD, ref(fdRcds[vchID]), ref(frameFD), vchID);
                 }
             }
 
@@ -190,41 +193,36 @@ int main() {
                     vchIDCC = vchID;
 #ifndef _CPU_INFER
                     resize(frame, frameCC, Size(cfg.ccNetWidth, cfg.ccNetHeight));
-                    ccTh = new thread(doRunModelCC, ref(density), ref(ccRcd), ref(frameCC), vchID);
+                    ccTh = new thread(doRunModelCC, ref(density), ref(ccRcds[vchID]), ref(frameCC), vchID);
 #else
-                    for (CCZone &ccZone : ccRcd.ccZones) {
-                        if (ccZone.vchID == vchID) {
-                            ccZone.setCanvas(frame);
-                            ccTh = new thread(doRunModelCC, ref(density), ref(ccRcd), ref(frameCC), vchID);
-                            break;
-                        }
-                    }
+                    ccRcds[vchID].ccZones[0].setCanvas(frame);  // only one ccZone
+                    ccTh = new thread(doRunModelCC, ref(density), ref(ccRcds[vchID]), ref(frameCC), vchID);
 #endif
                 }
             }
 
             vector<DetBox> dboxes;
             if (cfg.odChannels[vchID])
-                runModel(dboxes, odRcd, frame, vchID, frameCnt, cfg.odScoreTh);
+                runModel(dboxes, odRcds[vchID], frame, vchID, frameCnt, cfg.odScoreTh);
 
             end = chrono::steady_clock::now();
 
             bool needToDraw = logger.needToDraw(vchID);
             if (needToDraw || cfg.recording) {
                 if (cfg.odChannels[vchID])
-                    drawBoxes(cfg, odRcd, frame, dboxes, vchID);
+                    drawBoxes(cfg, odRcds[vchID], frame, dboxes, vchID);
 
                 if (cfg.fdChannels[vchID])
-                    drawFD(cfg, fdRcd, frame, vchID, cfg.fdScoreTh);
+                    drawFD(cfg, fdRcds[vchID], frame, vchID, cfg.fdScoreTh);
 
                 if (cfg.ccChannels[vchID])
-                    drawCC(cfg, ccRcd, densityChPre[vchID], frame, vchID);
+                    drawCC(cfg, ccRcds[vchID], densityChPre[vchID], frame, vchID);
             }
 
             if (cfg.recording)
                 streamer.write(frame, vchID);  // write a frame to the output video
 
-            logger.writeData(cfg, odRcd, fdRcd, ccRcd, frame, frameCnt, vchID, now);
+            logger.writeData(cfg, odRcds[vchID], fdRcds[vchID], ccRcds[vchID], frame, frameCnt, vchID, now);
 
             int inf = chrono::duration_cast<chrono::milliseconds>(end - start).count();
 
@@ -408,30 +406,28 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
         vector<string> texts = {"People Counting for Each Zone"};
 
         for (Zone &zone : odRcd.zones) {
-            if (vchID == zone.vchID) {
-                int curMTotal, curFTotal;
-                curMTotal = zone.curPeople[0][0] + zone.curPeople[0][1] + zone.curPeople[0][2];
-                curFTotal = zone.curPeople[1][0] + zone.curPeople[1][1] + zone.curPeople[1][2];
+            int curMTotal, curFTotal;
+            curMTotal = zone.curPeople[0][0] + zone.curPeople[0][1] + zone.curPeople[0][2];
+            curFTotal = zone.curPeople[1][0] + zone.curPeople[1][1] + zone.curPeople[1][2];
 
-                string title = " Zone " + to_string(zone.zoneID);
-                string cur = "   Cur> M: " + to_string(curMTotal) + "(" + to_string(zone.curPeople[0][0]) + ", " +
-                             to_string(zone.curPeople[0][1]) + ", " + to_string(zone.curPeople[0][2]) + "), " +
-                             " F: " + to_string(curFTotal) + "(" + to_string(zone.curPeople[1][0]) + ", " +
-                             to_string(zone.curPeople[1][1]) + ", " + to_string(zone.curPeople[1][2]) + ")";
+            string title = " Zone " + to_string(zone.zoneID);
+            string cur = "   Cur> M: " + to_string(curMTotal) + "(" + to_string(zone.curPeople[0][0]) + ", " +
+                         to_string(zone.curPeople[0][1]) + ", " + to_string(zone.curPeople[0][2]) + "), " +
+                         " F: " + to_string(curFTotal) + "(" + to_string(zone.curPeople[1][0]) + ", " +
+                         to_string(zone.curPeople[1][1]) + ", " + to_string(zone.curPeople[1][2]) + ")";
 
-                int hitMTotal, hitFTotal;
-                hitMTotal = zone.hitMap[0][0] + zone.hitMap[0][1] + zone.hitMap[0][2];
-                hitFTotal = zone.hitMap[1][0] + zone.hitMap[1][1] + zone.hitMap[1][2];
+            int hitMTotal, hitFTotal;
+            hitMTotal = zone.hitMap[0][0] + zone.hitMap[0][1] + zone.hitMap[0][2];
+            hitFTotal = zone.hitMap[1][0] + zone.hitMap[1][1] + zone.hitMap[1][2];
 
-                string hit = "   Hit> M: " + to_string(hitMTotal) + "(" + to_string(zone.hitMap[0][0]) + ", " +
-                             to_string(zone.hitMap[0][1]) + ", " + to_string(zone.hitMap[0][2]) + "), " +
-                             " F: " + to_string(hitFTotal) + "(" + to_string(zone.hitMap[1][0]) + ", " +
-                             to_string(zone.hitMap[1][1]) + ", " + to_string(zone.hitMap[1][2]) + ")";
+            string hit = "   Hit> M: " + to_string(hitMTotal) + "(" + to_string(zone.hitMap[0][0]) + ", " +
+                         to_string(zone.hitMap[0][1]) + ", " + to_string(zone.hitMap[0][2]) + "), " +
+                         " F: " + to_string(hitFTotal) + "(" + to_string(zone.hitMap[1][0]) + ", " +
+                         to_string(zone.hitMap[1][1]) + ", " + to_string(zone.hitMap[1][2]) + ")";
 
-                texts.push_back(title);
-                texts.push_back(cur);
-                texts.push_back(hit);
-            }
+            texts.push_back(title);
+            texts.push_back(cur);
+            texts.push_back(hit);
         }
 
         Vis::drawTextBlock(img, Point(18, 500), texts, 1, 2);
@@ -439,8 +435,7 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
 
     if (DRAW_CNTLINE) {
         for (CntLine &cntLine : odRcd.cntLines) {
-            if (vchID == cntLine.vchID)
-                line(img, cntLine.pts[0], cntLine.pts[1], Scalar(50, 255, 50), 2, LINE_8);
+            line(img, cntLine.pts[0], cntLine.pts[1], Scalar(50, 255, 50), 2, LINE_8);
         }
     }
 
@@ -449,30 +444,28 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
         vector<string> texts = {"People Counting for Each Line"};
 
         for (CntLine &cntLine : odRcd.cntLines) {
-            if (vchID == cntLine.vchID) {
-                int upMTotal, upFTotal;
-                upMTotal = cntLine.totalUL[0][0] + cntLine.totalUL[0][1] + cntLine.totalUL[0][2];
-                upFTotal = cntLine.totalUL[1][0] + cntLine.totalUL[1][1] + cntLine.totalUL[1][2];
+            int upMTotal, upFTotal;
+            upMTotal = cntLine.totalUL[0][0] + cntLine.totalUL[0][1] + cntLine.totalUL[0][2];
+            upFTotal = cntLine.totalUL[1][0] + cntLine.totalUL[1][1] + cntLine.totalUL[1][2];
 
-                string title = " Counting Line " + to_string(cntLine.clineID);
-                string up = "   U/L> M: " + to_string(upMTotal) + "(" + to_string(cntLine.totalUL[0][0]) + ", " +
-                            to_string(cntLine.totalUL[0][1]) + ", " + to_string(cntLine.totalUL[0][2]) + "), " +
-                            " F: " + to_string(upFTotal) + "(" + to_string(cntLine.totalUL[1][0]) + ", " +
-                            to_string(cntLine.totalUL[1][1]) + ", " + to_string(cntLine.totalUL[1][2]) + ")";
+            string title = " Counting Line " + to_string(cntLine.clineID);
+            string up = "   U/L> M: " + to_string(upMTotal) + "(" + to_string(cntLine.totalUL[0][0]) + ", " +
+                        to_string(cntLine.totalUL[0][1]) + ", " + to_string(cntLine.totalUL[0][2]) + "), " +
+                        " F: " + to_string(upFTotal) + "(" + to_string(cntLine.totalUL[1][0]) + ", " +
+                        to_string(cntLine.totalUL[1][1]) + ", " + to_string(cntLine.totalUL[1][2]) + ")";
 
-                int dwMTotal, dwFTotal;
-                dwMTotal = cntLine.totalDR[0][0] + cntLine.totalDR[0][1] + cntLine.totalDR[0][2];
-                dwFTotal = cntLine.totalDR[1][0] + cntLine.totalDR[1][1] + cntLine.totalDR[1][2];
+            int dwMTotal, dwFTotal;
+            dwMTotal = cntLine.totalDR[0][0] + cntLine.totalDR[0][1] + cntLine.totalDR[0][2];
+            dwFTotal = cntLine.totalDR[1][0] + cntLine.totalDR[1][1] + cntLine.totalDR[1][2];
 
-                string dw = "   D/R> M: " + to_string(dwMTotal) + "(" + to_string(cntLine.totalDR[0][0]) + ", " +
-                            to_string(cntLine.totalDR[0][1]) + ", " + to_string(cntLine.totalDR[0][2]) + "), " +
-                            " F: " + to_string(dwFTotal) + "(" + to_string(cntLine.totalDR[1][0]) + ", " +
-                            to_string(cntLine.totalDR[1][1]) + ", " + to_string(cntLine.totalDR[1][2]) + ")";
+            string dw = "   D/R> M: " + to_string(dwMTotal) + "(" + to_string(cntLine.totalDR[0][0]) + ", " +
+                        to_string(cntLine.totalDR[0][1]) + ", " + to_string(cntLine.totalDR[0][2]) + "), " +
+                        " F: " + to_string(dwFTotal) + "(" + to_string(cntLine.totalDR[1][0]) + ", " +
+                        to_string(cntLine.totalDR[1][1]) + ", " + to_string(cntLine.totalDR[1][2]) + ")";
 
-                texts.push_back(title);
-                texts.push_back(up);
-                texts.push_back(dw);
-            }
+            texts.push_back(title);
+            texts.push_back(up);
+            texts.push_back(dw);
         }
 
         Vis::drawTextBlock(img, Point(18, 140), texts, 1, 2);
@@ -498,7 +491,7 @@ void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh) 
                                     Point(sx + 21, sy + 33), Point(sx + 63, sy + 42), Point(sx + 54, sy + 60),
                                     Point(sx + 36, sy + 87), Point(sx + 36, sy + 65)};
 
-    if (fdRcd.fireProbsMul[vchID].back() > fdScoreTh) {
+    if (fdRcd.fireProbs.back() > fdScoreTh) {
         if (DRAW_FIRE_DETECTION) {
             /// draw canvas
             Mat fdIconRegion = img(Rect(Point(fx - 4, fy - 2), Point(fx + 63 + 4, fy + 87 + 2)));
@@ -509,7 +502,7 @@ void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh) 
         strFire = "O";
     }
 
-    if (fdRcd.smokeProbsMul[vchID].back() > fdScoreTh) {
+    if (fdRcd.smokeProbs.back() > fdScoreTh) {
         if (DRAW_FIRE_DETECTION) {
             Mat smokeIconRegion = img(Rect(Point(sx - 4, sy - 2), Point(sx + 63 + 4, sy + 87 + 2)));
             smokeIconRegion -= Scalar(100, 100, 100);
@@ -544,24 +537,20 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
             cv::Mat layer;
 
             for (CCZone &ccZone : ccRcd.ccZones) {
-                if (ccZone.vchID == vchID) {
-                    if (layer.empty())
-                        layer = img.clone();
+                if (layer.empty())
+                    layer = img.clone();
 
-                    int z = ccZone.ccZoneID;
-                    const Scalar color(50, 50, 255);
-                    fillPoly(layer, {ccZone.pts}, color);
-                }
+                int z = ccZone.ccZoneID;
+                const Scalar color(50, 50, 255);
+                fillPoly(layer, {ccZone.pts}, color);
             }
 
             if (!layer.empty())
                 cv::addWeighted(img, alpha, layer, 1 - alpha, 0, img);
         } else {
             for (CCZone &ccZone : ccRcd.ccZones) {
-                if (ccZone.vchID == vchID) {
-                    const Scalar color(20, 20, 255);
-                    polylines(img, {ccZone.pts}, true, color, 2);
-                }
+                const Scalar color(20, 20, 255);
+                polylines(img, {ccZone.pts}, true, color, 2);
             }
         }
     }
@@ -576,17 +565,15 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
         ccTexts.push_back(string("Crowd Counting for Each CZone"));
 
 #ifndef _CPU_INFER
-        ccTexts.push_back(std::format("  Entire Area:{:>5}", ccRcd.ccNumFrames[vchID].back()));
+        ccTexts.push_back(std::format("  Entire Area:{:>5}", ccRcd.ccNumFrames.back()));
 #endif
 
         for (CCZone &ccZone : ccRcd.ccZones) {
-            if (ccZone.vchID == vchID) {
-                string text =
-                    // std::format(" -CZone {}: {:>4}", ccZone.ccZoneID+1, ccZone.ccNums.back());
-                    std::format("  CZone {}:{:>7}(L{} {:.2f})", ccZone.ccZoneID, ccZone.ccNums.back(), ccZone.ccLevel,
-                                ccZone.avgWindow);
-                ccTexts.push_back(text);
-            }
+            string text =
+                // std::format(" -CZone {}: {:>4}", ccZone.ccZoneID+1, ccZone.ccNums.back());
+                std::format("  CZone {}:{:>7}(L{} {:.2f})", ccZone.ccZoneID, ccZone.ccNums.back(), ccZone.ccLevel,
+                            ccZone.avgWindow);
+            ccTexts.push_back(text);
         }
 
         Vis::drawTextBlock(img, Point(img.cols - 555, 500), ccTexts, 1, 2);

@@ -33,7 +33,8 @@
 #include <opencv2/core.hpp>
 
 // parsing
-GENERATOR_API bool parseConfigAPI(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
+GENERATOR_API bool parseConfigAPI(Config &cfg, std::vector<ODRecord> &odRcds, std::vector<FDRecord> &fdRcds,
+                                  std::vector<CCRecord> &ccRcds);
 
 /** @brief Initialize model
  *

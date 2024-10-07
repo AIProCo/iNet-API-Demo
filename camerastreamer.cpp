@@ -5,11 +5,10 @@
 #include "opencv2/opencv.hpp"
 //#include "util.h"
 
-CameraStreamer::CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd, Logger *_pLogger)
+CameraStreamer::CameraStreamer(Config &cfg, vector<ODRecord> &odRcds, vector<CCRecord> &ccRcds, Logger *_pLogger)
     : DebugMessage(cfg) {
-    pOdRcd = &odRcd;
-    pFdRcd = &fdRcd;
-    pCcRcd = &ccRcd;
+    pOdRcds = &odRcds;
+    pCcRcds = &ccRcds;
     pLogger = _pLogger;
 
     numChannels = cfg.numChannels;
@@ -117,7 +116,7 @@ void CameraStreamer::keepConnected(int vchID) {
                     exit(-1);
                 }
 
-                for (CntLine &c : pOdRcd->cntLines) {
+                for (CntLine &c : (*pOdRcds)[vchID].cntLines) {
                     if (vchID == c.vchID) {
                         if (c.pts[0].x < 0 || c.pts[0].x >= frameWidth || c.pts[1].x < 0 || c.pts[1].x >= frameWidth) {
                             lg(std::format("[{}] cntLine pt.x error in keepConnected: {} {} {}", vchID, c.pts[0].x,
@@ -133,7 +132,7 @@ void CameraStreamer::keepConnected(int vchID) {
                     }
                 }
 
-                for (Zone &z : pOdRcd->zones) {
+                for (Zone &z : (*pOdRcds)[vchID].zones) {
                     if (vchID == z.vchID) {
                         for (Point &pt : z.pts) {
                             if (pt.x < 0 || pt.x >= frameWidth) {
@@ -152,7 +151,7 @@ void CameraStreamer::keepConnected(int vchID) {
                 }
 
 #ifndef _CPU_INFER
-                for (CCZone &z : pCcRcd->ccZones) {
+                for (CCZone &z : (*pCcRcds)[vchID].ccZones) {
                     if (vchID == z.vchID) {
                         for (Point &pt : z.pts) {
                             if (pt.x < 0 || pt.x >= frameWidth) {

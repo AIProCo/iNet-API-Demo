@@ -311,21 +311,24 @@ struct CCZone {
 };
 
 struct ODRecord {
+    int vchID;
     std::vector<Zone> zones;        // zones
     std::vector<CntLine> cntLines;  // cntLine
 };
 
 struct FDRecord {
-    std::vector<std::deque<float>> fireProbsMul;   // fire probability
-    std::vector<std::deque<float>> smokeProbsMul;  // smoke probability
-    std::vector<int> fireEvents;                   // fire event
-    std::vector<int> smokeEvents;                  // smoke event
-    std::vector<int> afterFireEvents;              // for internal usage in logger
+    int vchID;
+    std::deque<float> fireProbs;   // fire probability
+    std::deque<float> smokeProbs;  // smoke probability
+    int fireEvent;                 // fire event
+    int smokeEvent;                // smoke event
+    int afterFireEvent;            // for internal usage in logger
 };
 
 struct CCRecord {
-    std::vector<std::deque<int>> ccNumFrames;  // people in the whole frame
-    std::vector<CCZone> ccZones;               // ccZones
+    int vchID;
+    std::deque<int> ccNumFrames;  // people in the whole frame
+    std::vector<CCZone> ccZones;  // ccZones
 };
 
 /// data structure for pedestrian attributes (gender, age, has backpack, etc)

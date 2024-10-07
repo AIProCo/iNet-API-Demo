@@ -268,8 +268,8 @@ class Vis {
                 fontScale, textColor, thickness);
 
         vector<Point> firePts, smokePts;
-        deque<float> &fireProbs = fdRcd.fireProbsMul[vchID];
-        deque<float> &smokeProbs = fdRcd.smokeProbsMul[vchID];
+        deque<float> &fireProbs = fdRcd.fireProbs;
+        deque<float> &smokeProbs = fdRcd.smokeProbs;
 
         int windowSize = fireProbs.size();
         float deltaX = (float)insideRect.width / (windowSize - 1);

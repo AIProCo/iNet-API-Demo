@@ -520,9 +520,14 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     cntLine.init();
 
+                    if (odRcd.vchID != cntLine.vchID) {
+                        lg(std::format("vchID errror(insert line): {} {}", odRcd.vchID, cntLine.vchID));
+                        return false;
+                    }
+
                     bool duplicated = false;
                     for (auto &item : odRcd.cntLines) {
-                        if (item.vchID == cntLine.vchID && item.clineID == cntLine.clineID) {
+                        if (item.clineID == cntLine.clineID) {
                             duplicated = true;
                             break;
                         }
@@ -565,8 +570,13 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     else
                         cntLine.direction = 1;  // vertical line -> use delta x and count L and R
 
+                    if (odRcd.vchID != cntLine.vchID) {
+                        lg(std::format("vchID errror(modify line): {} {}", odRcd.vchID, cntLine.vchID));
+                        return false;
+                    }
+
                     for (auto &item : odRcd.cntLines) {
-                        if (item.vchID == cntLine.vchID && item.clineID == cntLine.clineID) {
+                        if (item.clineID == cntLine.clineID) {
                             item.pts[0] = cntLine.pts[0];
                             item.pts[1] = cntLine.pts[1];
                             item.direction = cntLine.direction;
@@ -585,8 +595,13 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                         return false;
                     }
 
+                    if (odRcd.vchID != vchID) {
+                        lg(std::format("vchID errror(remove line): {} {}", odRcd.vchID, vchID));
+                        return false;
+                    }
+
                     for (auto itr = odRcd.cntLines.begin(); itr != odRcd.cntLines.end();) {
-                        if (itr->clineID == cLineID && itr->vchID == vchID)
+                        if (itr->clineID == cLineID)
                             itr = odRcd.cntLines.erase(itr);
                         else
                             ++itr;
@@ -602,8 +617,8 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> zone.vchID;
                     ss >> zone.isMode;
 
-                    if (zone.vchID >= cfg.numChannels) {
-                        lg(std::format("zone.vchID error: {} {}", zone.vchID, cfg.numChannels));
+                    if (zone.vchID != odRcd.vchID) {
+                        lg(std::format("vchID errror(insert zone): {} {}", odRcd.vchID, zone.vchID));
                         return false;
                     }
 
@@ -629,7 +644,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     bool duplicated = false;
                     for (auto &item : odRcd.zones) {
-                        if (item.vchID == zone.vchID && item.zoneID == zone.zoneID) {
+                        if (item.zoneID == zone.zoneID) {
                             duplicated = true;
                             break;
                         }
@@ -652,8 +667,8 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> zone.vchID;
                     ss >> zone.isMode;
 
-                    if (zone.vchID >= cfg.numChannels) {
-                        lg(std::format("zone.vchID error: {} {}\n", zone.vchID, cfg.numChannels));
+                    if (zone.vchID != odRcd.vchID) {
+                        lg(std::format("vchID errror(modify zone): {} {}", odRcd.vchID, zone.vchID));
                         return false;
                     }
 
@@ -678,7 +693,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     }
 
                     for (auto &item : odRcd.zones) {
-                        if (item.vchID == zone.vchID && item.zoneID == zone.zoneID && item.isMode == zone.isMode) {
+                        if (item.zoneID == zone.zoneID && item.isMode == zone.isMode) {
                             std::copy(zone.pts.begin(), zone.pts.end(), item.pts.begin());
                             break;
                         }
@@ -690,13 +705,13 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> zoneID;
                     ss >> vchID;
 
-                    if (vchID >= cfg.numChannels) {
-                        lg(std::format("vchID error in remove zone: {} {}", vchID, cfg.numChannels));
+                    if (vchID != odRcd.vchID) {
+                        lg(std::format("vchID errror(remove zone): {} {}", odRcd.vchID, vchID));
                         return false;
                     }
 
                     for (auto itr = odRcd.zones.begin(); itr != odRcd.zones.end();) {
-                        if (itr->zoneID == zoneID && itr->vchID == vchID)
+                        if (itr->zoneID == zoneID)
                             itr = odRcd.zones.erase(itr);
                         else
                             ++itr;
@@ -713,21 +728,14 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> ccZone.ccZoneID;
                     ss >> ccZone.vchID;
 
-                    if (ccZone.vchID >= cfg.numChannels) {
-                        lg(std::format("ccZone.vchID error: {} {}\n", ccZone.vchID, cfg.numChannels));
+                    if (ccZone.vchID != ccRcd.vchID) {
+                        lg(std::format("vchID errror(insert ccZone): {} {}", ccRcd.vchID, ccZone.vchID));
                         return false;
                     }
 #ifdef _CPU_INFER
-                    bool isFirst = true;
-                    for (auto &item : ccRcd.ccZones) {  // Store only one ccZone for each vchID
-                        if (item.vchID == ccZone.vchID) {
-                            isFirst = false;
-                            break;
-                        }
-                    }
-
-                    if (!isFirst) {
-                        cout << "CCZone error!: Only one cczone can be used in cpu mode\n";
+                    // Store only one ccZone for each vchID in CPU mode
+                    if (!ccRcd.ccZones.size() > 0) {
+                        cout << "CCZone error!: Only one ccZone can be used in cpu mode\n";
                         continue;
                     }
 #endif
@@ -777,7 +785,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     bool duplicated = false;
                     for (auto &item : ccRcd.ccZones) {
-                        if (item.vchID == ccZone.vchID && item.ccZoneID == ccZone.ccZoneID) {
+                        if (item.ccZoneID == ccZone.ccZoneID) {
                             duplicated = true;
                             break;
                         }
@@ -798,8 +806,8 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> ccZone.ccZoneID;
                     ss >> ccZone.vchID;
 
-                    if (ccZone.vchID >= cfg.numChannels) {
-                        lg(std::format("ccZone.vchID error: {} {}\n", ccZone.vchID, cfg.numChannels));
+                    if (ccZone.vchID != ccRcd.vchID) {
+                        lg(std::format("vchID errror(modify ccZone): {} {}", ccRcd.vchID, ccZone.vchID));
                         return false;
                     }
 
@@ -828,7 +836,7 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> ccZone.ccLevelThs[2];
 
                     for (auto &item : ccRcd.ccZones) {
-                        if (item.vchID == ccZone.vchID && item.ccZoneID == ccZone.ccZoneID) {
+                        if (item.ccZoneID == ccZone.ccZoneID) {
                             std::copy(ccZone.pts.begin(), ccZone.pts.end(), item.pts.begin());
                             item.ccLevelThs[0] = ccZone.ccLevelThs[0];
                             item.ccLevelThs[1] = ccZone.ccLevelThs[1];
@@ -850,13 +858,13 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> ccZoneID;
                     ss >> vchID;
 
-                    if (vchID >= cfg.numChannels) {
-                        lg(std::format("vchID error in remove cczone: {} {}\n", vchID, cfg.numChannels));
+                    if (vchID != ccRcd.vchID) {
+                        lg(std::format("vchID errror(remove ccZone): {} {}", ccRcd.vchID, vchID));
                         return false;
                     }
 
                     for (auto itr = ccRcd.ccZones.begin(); itr != ccRcd.ccZones.end();) {
-                        if (itr->ccZoneID == ccZoneID && itr->vchID == vchID) {
+                        if (itr->ccZoneID == ccZoneID) {
                             itr->enabled = false;
                             itr->vchID = -1;
                             itr = ccRcd.ccZones.erase(itr);
@@ -922,18 +930,16 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     for (auto &cntLine : odRcd.cntLines)
                         cntLine.init();
 
-                    for (int i = 0; i < cfg.numChannels; i++) {
-                        fdRcd.fireProbsMul[i].clear();
-                        fdRcd.fireProbsMul[i].clear();
+                    fdRcd.fireProbs.clear();
+                    fdRcd.fireProbs.clear();
+                    fdRcd.fireProbs.resize(cfg.fdWindowSize, 0.0f);
+                    fdRcd.smokeProbs.resize(cfg.fdWindowSize, 0.0f);
+                    fdRcd.fireEvent = 0;
+                    fdRcd.smokeEvent = 0;
+                    fdRcd.afterFireEvent = 0;
 
-                        fdRcd.fireProbsMul[i].resize(cfg.fdWindowSize, 0.0f);
-                        fdRcd.smokeProbsMul[i].resize(cfg.fdWindowSize, 0.0f);
-                    }
-
-                    for (int i = 0; i < cfg.numChannels; i++) {
-                        ccRcd.ccNumFrames[i].clear();
-                        ccRcd.ccNumFrames[i].resize(cfg.ccWindowSize);
-                    }
+                    ccRcd.ccNumFrames.clear();
+                    ccRcd.ccNumFrames.resize(cfg.ccWindowSize);
 
                     for (CCZone &ccZone : ccRcd.ccZones) {
                         ccZone.ccNums.clear();
@@ -1298,12 +1304,12 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
         }
 
         if (cfg.fdChannels[vchID]) {
-            int fireEvent = fdRcd.fireEvents[vchID];
-            int smokeEvent = fdRcd.smokeEvents[vchID];
+            int fireEvent = fdRcd.fireEvent;
+            int smokeEvent = fdRcd.smokeEvent;
 
-            int fireProb = fdRcd.fireProbsMul[vchID].back() * 1000;
-            int smokeProb = fdRcd.smokeProbsMul[vchID].back() * 1000;
-            int &afterFireEvent = fdRcd.afterFireEvents[vchID];
+            int fireProb = fdRcd.fireProbs.back() * 1000;
+            int smokeProb = fdRcd.smokeProbs.back() * 1000;
+            int &afterFireEvent = fdRcd.afterFireEvent;
 
             if ((fireProb > cfg.fdScoreTh) || (smokeProb > cfg.fdScoreTh)) {
                 string filename = std::format("{:02}{:02}{:02}.txt", curTm->tm_hour, curTm->tm_min, curTm->tm_sec);

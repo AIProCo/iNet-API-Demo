@@ -20,9 +20,8 @@ using namespace cv;
 
 class CameraStreamer : public DebugMessage {
    public:
-    ODRecord *pOdRcd;
-    FDRecord *pFdRcd;
-    CCRecord *pCcRcd;
+    vector<ODRecord> *pOdRcds;
+    vector<CCRecord> *pCcRcds;
     Logger *pLogger;
 
     int numChannels;
@@ -40,7 +39,7 @@ class CameraStreamer : public DebugMessage {
     vector<VideoWriter> videoWriters;
 
     std::vector<std::thread *> cameraThreads;  // thread that run camera capture process
-    CameraStreamer(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd, Logger *_pLogger);
+    CameraStreamer(Config &cfg, std::vector<ODRecord> &odRcds, std::vector<CCRecord> &ccRcds, Logger *_pLogger);
     ~CameraStreamer();
 
     void destroy();  // explicit destroy function. (cuz destructor is called randomly)
