@@ -27,6 +27,7 @@ class Logger : public DebugMessage {
     bool writeLive;             // for internal usage
     int numChannels, numPages;  // at most 9 channels for each page
     int targetLiveChannel;      // live channel to be drown
+    bool updateIS;
 
     vector<tm> preTms;
     vector<Mat> canvases;
@@ -52,7 +53,7 @@ class Logger : public DebugMessage {
 
     void drawCanvase(Mat &frame, int vchID, tm *curTm, int msec);
 
-    void writeIS(Config &cfg, ODRecord &odRcd, CCRecord &ccRcd);
+    void writeIS(Config &cfg, vector<ODRecord> &odRcds, vector<CCRecord> &ccRcds);
     void writeCntLine(ofstream &f, CntLine *c, CntLine *p = NULL);
     void writeZone(ofstream &f, Zone *c, Zone *p = NULL);
 
@@ -73,7 +74,8 @@ class Logger : public DebugMessage {
 
     bool createLog();
     bool needToDraw(int vchID);
-    bool checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd);
+    bool checkCmdOD(Config &cfg, vector<ODRecord> &odRcds, vector<FDRecord> &fdRcds, vector<CCRecord> &ccRcds);
+    bool checkCmdCC(Config &cfg, vector<CCRecord> &ccRcds);
     void writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd, Mat &frame, unsigned int &frameCnt,
                    int vchID, system_clock::time_point now);
     void destroy();

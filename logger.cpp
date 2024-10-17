@@ -13,6 +13,7 @@ Logger::Logger(Config &cfg) : DebugMessage(cfg) {
     numPages = ((numChannels - 1) / 9) + 1;  // 9 channels are displayed in one channel
     debugMode = cfg.debugMode;
     targetLiveChannel = -1;
+    updateIS = false;
 
     pageUpdated.resize(numPages, false);
     preTimes.resize(numPages, -1);
@@ -42,6 +43,16 @@ Logger::Logger(Config &cfg) : DebugMessage(cfg) {
         cout << "Parsing Error!\n";
     }
 
+    // delete garbage cmds2e.txt and cmde2s.txt
+    string filenameS2E = "cmds2e.txt";
+    string txtPathS2E = normLogPath(string(CONFIG_PATH)) + "/" + filenameS2E;
+    remove(txtPathS2E);
+
+    string filenameE2S = "cmde2s.txt";
+    string txtPathE2S = normLogPath(string(CONFIG_PATH)) + "/" + filenameE2S;
+    remove(txtPathE2S);
+
+    // create a log file for today
     createLog();
 
     if (!logEnable)
@@ -286,54 +297,58 @@ void Logger::drawCanvase(Mat &frame, int vchID, tm *curTm, int msec) {
     pageUpdated[page] = true;
 }
 
-void Logger::writeIS(Config &cfg, ODRecord &odRcd, CCRecord &ccRcd) {
+void Logger::writeIS(Config &cfg, vector<ODRecord> &odRcds, vector<CCRecord> &ccRcds) {
     string filenameIS = "is.txt";
     string txtPathIS = normLogPath(string(CONFIG_PATH)) + "/" + filenameIS;
 
     ofstream is(txtPathIS);
-    lg(std::format("writeIS: Line = {}, Zone = {}, CZone = {}\n", odRcd.cntLines.size(), odRcd.zones.size(),
-                   ccRcd.ccZones.size()));
+    lg(std::format("writeIS\n"));
 
     if (is.is_open()) {
-        for (auto &cntLine : odRcd.cntLines) {
-            is << 0 << " ";
-            is << cntLine.clineID << " ";
-            is << cntLine.vchID << " ";
-            is << cntLine.isMode << " ";
-            is << cntLine.pts[0].x << " ";
-            is << cntLine.pts[0].y << " ";
-            is << cntLine.pts[1].x << " ";
-            is << cntLine.pts[1].y << endl;
+        for (ODRecord &odRcd : odRcds) {
+            for (auto &cntLine : odRcd.cntLines) {
+                is << 0 << " ";
+                is << cntLine.clineID << " ";
+                is << cntLine.vchID << " ";
+                is << cntLine.isMode << " ";
+                is << cntLine.pts[0].x << " ";
+                is << cntLine.pts[0].y << " ";
+                is << cntLine.pts[1].x << " ";
+                is << cntLine.pts[1].y << endl;
+            }
+            for (auto &zone : odRcd.zones) {
+                is << 1 << " ";
+                is << zone.zoneID << " ";
+                is << zone.vchID << " ";
+                is << zone.isMode << " ";
+                is << zone.pts[0].x << " ";
+                is << zone.pts[0].y << " ";
+                is << zone.pts[1].x << " ";
+                is << zone.pts[1].y << " ";
+                is << zone.pts[2].x << " ";
+                is << zone.pts[2].y << " ";
+                is << zone.pts[3].x << " ";
+                is << zone.pts[3].y << endl;
+            }
         }
-        for (auto &zone : odRcd.zones) {
-            is << 1 << " ";
-            is << zone.zoneID << " ";
-            is << zone.vchID << " ";
-            is << zone.isMode << " ";
-            is << zone.pts[0].x << " ";
-            is << zone.pts[0].y << " ";
-            is << zone.pts[1].x << " ";
-            is << zone.pts[1].y << " ";
-            is << zone.pts[2].x << " ";
-            is << zone.pts[2].y << " ";
-            is << zone.pts[3].x << " ";
-            is << zone.pts[3].y << endl;
-        }
-        for (auto &ccZone : ccRcd.ccZones) {
-            is << 2 << " ";
-            is << ccZone.ccZoneID << " ";
-            is << ccZone.vchID << " ";
-            is << ccZone.pts[0].x << " ";
-            is << ccZone.pts[0].y << " ";
-            is << ccZone.pts[1].x << " ";
-            is << ccZone.pts[1].y << " ";
-            is << ccZone.pts[2].x << " ";
-            is << ccZone.pts[2].y << " ";
-            is << ccZone.pts[3].x << " ";
-            is << ccZone.pts[3].y << " ";
-            is << ccZone.ccLevelThs[0] << " ";
-            is << ccZone.ccLevelThs[1] << " ";
-            is << ccZone.ccLevelThs[2] << endl;
+
+        for (CCRecord &ccRcd : ccRcds) {
+            for (auto &ccZone : ccRcd.ccZones) {
+                is << 2 << " ";
+                is << ccZone.ccZoneID << " ";
+                is << ccZone.vchID << " ";
+                is << ccZone.pts[0].x << " ";
+                is << ccZone.pts[0].y << " ";
+                is << ccZone.pts[1].x << " ";
+                is << ccZone.pts[1].y << " ";
+                is << ccZone.pts[2].x << " ";
+                is << ccZone.pts[2].y << " ";
+                is << ccZone.pts[3].x << " ";
+                is << ccZone.pts[3].y << " ";
+                is << ccZone.ccLevelThs[0] << " ";
+                is << ccZone.ccLevelThs[1] << " ";
+                is << ccZone.ccLevelThs[2] << endl;
+            }
         }
 
         // Write scoreThs
@@ -462,26 +477,28 @@ bool Logger::needToDraw(int vchID) {
     return !vchUpdated[vchID];
 }
 
-bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &ccRcd) {
+bool Logger::checkCmdOD(Config &cfg, vector<ODRecord> &odRcds, vector<FDRecord> &fdRcds, vector<CCRecord> &ccRcds) {
     if (!logEnable)
         return true;
 
     string filenameS2E = "cmds2e.txt";
     string txtPathS2E = normLogPath(string(CONFIG_PATH)) + "/" + filenameS2E;
     ifstream cmdFileS2E(txtPathS2E);
-    bool updateIS = false;
     bool terminateProgram = false;
 
     if (cmdFileS2E.is_open()) {
-        updateIS = true;
         string line;
+        getline(cmdFileS2E, line);
+        stringstream ss(line);
+        cmdFileS2E.close();
 
-        while (getline(cmdFileS2E, line)) {
-            int cmd;
-            stringstream ss(line);
+        int cmd;
+        ss >> cmd;
 
-            ss >> cmd;
-            lg(std::format("Get cmd: {}\n", line));
+        if (cmd != CMD_INSERT_CCZONE && cmd != CMD_MODIFY_CCZONE && cmd != CMD_REMOVE_CCZONE) {
+            lg(std::format("Get cmd: {} in checkCmdOD\n", line));
+
+            updateIS = true;
 
             switch (cmd) {
                 case CMD_INSERT_LINE: {
@@ -501,40 +518,41 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     if (cntLine.pts[0].x < 0 || cntLine.pts[0].x >= fW || cntLine.pts[1].x < 0 ||
                         cntLine.pts[1].x >= fW) {
-                        lg(std::format("cntLine.pts.x error: {} {} {}", cntLine.pts[0].x, cntLine.pts[1].x, fW));
+                        lg(std::format("cntLine.pts.x error: {} {} {}\n", cntLine.pts[0].x, cntLine.pts[1].x, fW));
                         return false;
                     }
 
                     if (cntLine.pts[0].y < 0 || cntLine.pts[0].y >= fH || cntLine.pts[1].y < 0 ||
                         cntLine.pts[1].y >= fH) {
-                        lg(std::format("cntLine.pts.y error: {} {} {}", cntLine.pts[0].y, cntLine.pts[1].y, fH));
+                        lg(std::format("cntLine.pts.y error: {} {} {}\n", cntLine.pts[0].y, cntLine.pts[1].y, fH));
                         return false;
                     }
 
                     if (abs(cntLine.pts[0].x - cntLine.pts[1].x) > abs(cntLine.pts[0].y - cntLine.pts[1].y))
                         cntLine.direction = 0;  // horizontal line -> use delta
-                                                // y and count U and D
+                    // y and count U and D
                     else
                         cntLine.direction = 1;  // vertical line -> use delta x
-                                                // and count L and R
+                    // and count L and R
 
                     cntLine.init();
 
-                    if (odRcd.vchID != cntLine.vchID) {
-                        lg(std::format("vchID errror(insert line): {} {}", odRcd.vchID, cntLine.vchID));
-                        return false;
-                    }
-
                     bool duplicated = false;
-                    for (auto &item : odRcd.cntLines) {
-                        if (item.clineID == cntLine.clineID) {
-                            duplicated = true;
-                            break;
-                        }
-                    }
+                    for (ODRecord &odRcd : odRcds) {
+                        if (odRcd.vchID != cntLine.vchID)
+                            continue;
 
-                    if (!duplicated) {
-                        odRcd.cntLines.push_back(cntLine);
+                        for (auto &item : odRcd.cntLines) {
+                            if (item.clineID == cntLine.clineID) {
+                                lg(std::format("duplicated line(insert line): {} {}\n", odRcd.vchID, cntLine.vchID));
+                                duplicated = true;
+                                break;
+                            }
+                        }
+
+                        if (!duplicated) {
+                            odRcd.cntLines.push_back(cntLine);
+                        }
                     }
                     break;
                 }
@@ -555,13 +573,13 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     if (cntLine.pts[0].x < 0 || cntLine.pts[0].x >= fW || cntLine.pts[1].x < 0 ||
                         cntLine.pts[1].x >= fW) {
-                        lg(std::format("cntLine.pts.x error: {} {} {}", cntLine.pts[0].x, cntLine.pts[1].x, fW));
+                        lg(std::format("cntLine.pts.x error: {} {} {}\n", cntLine.pts[0].x, cntLine.pts[1].x, fW));
                         return false;
                     }
 
                     if (cntLine.pts[0].y < 0 || cntLine.pts[0].y >= fH || cntLine.pts[1].y < 0 ||
                         cntLine.pts[1].y >= fH) {
-                        lg(std::format("cntLine.pts.y error: {} {} {}", cntLine.pts[0].y, cntLine.pts[1].y, fH));
+                        lg(std::format("cntLine.pts.y error: {} {} {}\n", cntLine.pts[0].y, cntLine.pts[1].y, fH));
                         return false;
                     }
 
@@ -570,17 +588,23 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     else
                         cntLine.direction = 1;  // vertical line -> use delta x and count L and R
 
-                    if (odRcd.vchID != cntLine.vchID) {
-                        lg(std::format("vchID errror(modify line): {} {}", odRcd.vchID, cntLine.vchID));
-                        return false;
-                    }
+                    for (ODRecord &odRcd : odRcds) {
+                        if (odRcd.vchID != cntLine.vchID)
+                            continue;
 
-                    for (auto &item : odRcd.cntLines) {
-                        if (item.clineID == cntLine.clineID) {
-                            item.pts[0] = cntLine.pts[0];
-                            item.pts[1] = cntLine.pts[1];
-                            item.direction = cntLine.direction;
-                            break;
+                        for (auto &item : odRcd.cntLines) {
+                            if (item.clineID == cntLine.clineID) {
+                                item.pts[0] = cntLine.pts[0];
+                                item.pts[1] = cntLine.pts[1];
+                                item.direction = cntLine.direction;
+
+                                if (item.isMode != cntLine.isMode) {
+                                    lg(std::format("Can't modify isMode(modify line): {} {}\n", item.isMode,
+                                                   cntLine.isMode));
+                                    return false;
+                                }
+                                break;
+                            }
                         }
                     }
                     break;
@@ -590,21 +614,21 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> cLineID;
                     ss >> vchID;
 
-                    if (vchID >= cfg.numChannels) {
-                        lg(std::format("vchID error in remove line: {} {}", vchID, cfg.numChannels));
+                    if (vchID >= cfg.numChannels || vchID < 0) {
+                        lg(std::format("vchID error in remove line: {} {}\n", vchID, cfg.numChannels));
                         return false;
                     }
 
-                    if (odRcd.vchID != vchID) {
-                        lg(std::format("vchID errror(remove line): {} {}", odRcd.vchID, vchID));
-                        return false;
-                    }
+                    for (ODRecord &odRcd : odRcds) {
+                        if (odRcd.vchID != vchID)
+                            continue;
 
-                    for (auto itr = odRcd.cntLines.begin(); itr != odRcd.cntLines.end();) {
-                        if (itr->clineID == cLineID)
-                            itr = odRcd.cntLines.erase(itr);
-                        else
-                            ++itr;
+                        for (auto itr = odRcd.cntLines.begin(); itr != odRcd.cntLines.end();) {
+                            if (itr->clineID == cLineID)
+                                itr = odRcd.cntLines.erase(itr);
+                            else
+                                ++itr;
+                        }
                     }
 
                     break;
@@ -617,11 +641,6 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> zone.vchID;
                     ss >> zone.isMode;
 
-                    if (zone.vchID != odRcd.vchID) {
-                        lg(std::format("vchID errror(insert zone): {} {}", odRcd.vchID, zone.vchID));
-                        return false;
-                    }
-
                     int fH = cfg.frameHeights[zone.vchID];
                     int fW = cfg.frameWidths[zone.vchID];
 
@@ -632,29 +651,35 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                         zone.pts.push_back(pt);
 
                         if (pt.x < 0 || pt.x >= fW) {
-                            lg(std::format("zone.pts.x error: {} {}", pt.x, fW));
+                            lg(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
                             return false;
                         }
 
                         if (pt.y < 0 || pt.y >= fH) {
-                            lg(std::format("zone.pts.y error: {} {}", pt.y, fH));
+                            lg(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
                             return false;
-                        }
-                    }
-
-                    bool duplicated = false;
-                    for (auto &item : odRcd.zones) {
-                        if (item.zoneID == zone.zoneID) {
-                            duplicated = true;
-                            break;
                         }
                     }
 
                     zone.state = 0;
                     zone.init();
 
-                    if (!duplicated) {
-                        odRcd.zones.push_back(zone);
+                    bool duplicated = false;
+                    for (ODRecord &odRcd : odRcds) {
+                        if (odRcd.vchID != zone.vchID)
+                            continue;
+
+                        for (auto &item : odRcd.zones) {
+                            if (item.zoneID == zone.zoneID) {
+                                lg(std::format("duplicated zone(insert zone): {} {}\n", odRcd.vchID, zone.zoneID));
+                                duplicated = true;
+                                break;
+                            }
+                        }
+
+                        if (!duplicated) {
+                            odRcd.zones.push_back(zone);
+                        }
                     }
 
                     break;
@@ -667,11 +692,6 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> zone.vchID;
                     ss >> zone.isMode;
 
-                    if (zone.vchID != odRcd.vchID) {
-                        lg(std::format("vchID errror(modify zone): {} {}", odRcd.vchID, zone.vchID));
-                        return false;
-                    }
-
                     int fH = cfg.frameHeights[zone.vchID];
                     int fW = cfg.frameWidths[zone.vchID];
 
@@ -692,10 +712,21 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                         }
                     }
 
-                    for (auto &item : odRcd.zones) {
-                        if (item.zoneID == zone.zoneID && item.isMode == zone.isMode) {
-                            std::copy(zone.pts.begin(), zone.pts.end(), item.pts.begin());
-                            break;
+                    for (ODRecord &odRcd : odRcds) {
+                        if (odRcd.vchID != zone.vchID)
+                            continue;
+
+                        for (auto &item : odRcd.zones) {
+                            if (item.zoneID == zone.zoneID) {
+                                if (item.isMode != zone.isMode) {
+                                    lg(std::format("Can't modify isMode(modify zone): {} {}\n", item.isMode,
+                                                   zone.isMode));
+                                    return false;
+                                }
+
+                                std::copy(zone.pts.begin(), zone.pts.end(), item.pts.begin());
+                                break;
+                            }
                         }
                     }
                     break;
@@ -705,171 +736,21 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
                     ss >> zoneID;
                     ss >> vchID;
 
-                    if (vchID != odRcd.vchID) {
-                        lg(std::format("vchID errror(remove zone): {} {}", odRcd.vchID, vchID));
+                    if (vchID >= cfg.numChannels || vchID < 0) {
+                        lg(std::format("vchID error in remove zone: {} {}\n", vchID, cfg.numChannels));
                         return false;
                     }
 
-                    for (auto itr = odRcd.zones.begin(); itr != odRcd.zones.end();) {
-                        if (itr->zoneID == zoneID)
-                            itr = odRcd.zones.erase(itr);
-                        else
-                            ++itr;
-                    }
-                    break;
-                }
-                case CMD_INSERT_CCZONE: {
-                    CCZone ccZone;
+                    for (ODRecord &odRcd : odRcds) {
+                        if (odRcd.vchID != vchID)
+                            continue;
 
-                    ccZone.enabled = true;
-                    ccZone.ccLevel = 0;
-                    ccZone.preCCLevel = 0;
-
-                    ss >> ccZone.ccZoneID;
-                    ss >> ccZone.vchID;
-
-                    if (ccZone.vchID != ccRcd.vchID) {
-                        lg(std::format("vchID errror(insert ccZone): {} {}", ccRcd.vchID, ccZone.vchID));
-                        return false;
-                    }
-#ifdef _CPU_INFER
-                    // Store only one ccZone for each vchID in CPU mode
-                    if (!ccRcd.ccZones.size() > 0) {
-                        cout << "CCZone error!: Only one ccZone can be used in cpu mode\n";
-                        continue;
-                    }
-#endif
-                    int fH = cfg.frameHeights[ccZone.vchID];
-                    int fW = cfg.frameWidths[ccZone.vchID];
-
-                    for (int i = 0; i < 4; i++) {
-                        Point pt;
-                        ss >> pt.x;
-                        ss >> pt.y;
-                        ccZone.pts.push_back(pt);
-
-                        if (pt.x < 0 || pt.x >= fW) {
-                            lg(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
-                            return false;
+                        for (auto itr = odRcd.zones.begin(); itr != odRcd.zones.end();) {
+                            if (itr->zoneID == zoneID)
+                                itr = odRcd.zones.erase(itr);
+                            else
+                                ++itr;
                         }
-
-                        if (pt.y < 0 || pt.y >= fH) {
-                            lg(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
-                            return false;
-                        }
-                    }
-
-                    ss >> ccZone.ccLevelThs[0];
-                    ss >> ccZone.ccLevelThs[1];
-                    ss >> ccZone.ccLevelThs[2];
-
-                    if (ccZone.ccLevelThs[0] > ccZone.ccLevelThs[1] || ccZone.ccLevelThs[1] > ccZone.ccLevelThs[2]) {
-                        cout << "ccLevelThs should be ordered.\n";
-                        return false;
-                    }
-
-                    ccZone.ccNums.resize(cfg.ccWindowSize, 0);
-
-                    ccZone.maxCC = 0;
-                    ccZone.maxCCDay = 0;
-
-                    ccZone.init();
-
-                    // init mask with empty Mat. This is generated in
-                    // CrowdCounter::runModel.
-                    ccZone.mask = cv::Mat();
-#ifdef _CPU_INFER
-                    ccZone.canvas = cv::Mat();
-                    ccZone.roiCanvas = cv::Mat();
-#endif
-
-                    bool duplicated = false;
-                    for (auto &item : ccRcd.ccZones) {
-                        if (item.ccZoneID == ccZone.ccZoneID) {
-                            duplicated = true;
-                            break;
-                        }
-                    }
-
-                    if (!duplicated)
-                        ccRcd.ccZones.push_back(ccZone);
-
-                    break;
-                }
-                case CMD_MODIFY_CCZONE: {
-                    CCZone ccZone;
-
-                    ccZone.enabled = true;
-                    ccZone.ccLevel = 0;
-                    ccZone.preCCLevel = 0;
-
-                    ss >> ccZone.ccZoneID;
-                    ss >> ccZone.vchID;
-
-                    if (ccZone.vchID != ccRcd.vchID) {
-                        lg(std::format("vchID errror(modify ccZone): {} {}", ccRcd.vchID, ccZone.vchID));
-                        return false;
-                    }
-
-                    int fH = cfg.frameHeights[ccZone.vchID];
-                    int fW = cfg.frameWidths[ccZone.vchID];
-
-                    for (int i = 0; i < 4; i++) {
-                        Point pt;
-                        ss >> pt.x;
-                        ss >> pt.y;
-                        ccZone.pts.push_back(pt);
-
-                        if (pt.x < 0 || pt.x >= fW) {
-                            lg(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
-                            return false;
-                        }
-
-                        if (pt.y < 0 || pt.y >= fH) {
-                            lg(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
-                            return false;
-                        }
-                    }
-
-                    ss >> ccZone.ccLevelThs[0];
-                    ss >> ccZone.ccLevelThs[1];
-                    ss >> ccZone.ccLevelThs[2];
-
-                    for (auto &item : ccRcd.ccZones) {
-                        if (item.ccZoneID == ccZone.ccZoneID) {
-                            std::copy(ccZone.pts.begin(), ccZone.pts.end(), item.pts.begin());
-                            item.ccLevelThs[0] = ccZone.ccLevelThs[0];
-                            item.ccLevelThs[1] = ccZone.ccLevelThs[1];
-                            item.ccLevelThs[2] = ccZone.ccLevelThs[2];
-
-                            item.mask = cv::Mat();
-#ifdef _CPU_INFER
-                            item.canvas = cv::Mat();
-                            item.roiCanvas = cv::Mat();
-#endif
-                            break;
-                        }
-                    }
-                    break;
-                }
-                case CMD_REMOVE_CCZONE: {
-                    int ccZoneID, vchID;
-
-                    ss >> ccZoneID;
-                    ss >> vchID;
-
-                    if (vchID != ccRcd.vchID) {
-                        lg(std::format("vchID errror(remove ccZone): {} {}", ccRcd.vchID, vchID));
-                        return false;
-                    }
-
-                    for (auto itr = ccRcd.ccZones.begin(); itr != ccRcd.ccZones.end();) {
-                        if (itr->ccZoneID == ccZoneID) {
-                            itr->enabled = false;
-                            itr->vchID = -1;
-                            itr = ccRcd.ccZones.erase(itr);
-                        } else
-                            ++itr;
                     }
                     break;
                 }
@@ -917,73 +798,226 @@ bool Logger::checkCmd(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &c
 
                     break;
                 }
-                case CMD_CLEARLOG: {
-                    remove_all(normLogPath(CNT_PATH));
-                    remove_all(normLogPath(FD_PATH));
-                    remove_all(normLogPath(CC_PATH));
-
-                    checkDirectories(numChannels);
-
-                    for (auto &zone : odRcd.zones)
-                        zone.init();
-
-                    for (auto &cntLine : odRcd.cntLines)
-                        cntLine.init();
-
-                    fdRcd.fireProbs.clear();
-                    fdRcd.fireProbs.clear();
-                    fdRcd.fireProbs.resize(cfg.fdWindowSize, 0.0f);
-                    fdRcd.smokeProbs.resize(cfg.fdWindowSize, 0.0f);
-                    fdRcd.fireEvent = 0;
-                    fdRcd.smokeEvent = 0;
-                    fdRcd.afterFireEvent = 0;
-
-                    ccRcd.ccNumFrames.clear();
-                    ccRcd.ccNumFrames.resize(cfg.ccWindowSize);
-
-                    for (CCZone &ccZone : ccRcd.ccZones) {
-                        ccZone.ccNums.clear();
-                        ccZone.ccNums.resize(cfg.ccWindowSize, 0);
-
-                        ccZone.maxCC = 0;
-                        ccZone.maxCCDay = 0;
-
-                        ccZone.init();
-                    }
-
-                    break;
-                }
-                case CMD_REMOVE_ALL_LINES_ZONES:
-                    odRcd.cntLines.clear();
-                    odRcd.zones.clear();
-                    break;
-                case CMD_REMOVE_ALL_LINES:
-                    odRcd.cntLines.clear();
-                    break;
-                case CMD_REMOVE_ALL_ZONES:
-                    odRcd.zones.clear();
-                    break;
-                case CMD_REMOVE_ALL_CCZONES:
-                    ccRcd.ccZones.clear();
-                    break;
                 case CMD_TERMINATE_PROGRAM:
                     terminateProgram = true;
                     break;
                 default:
                     break;
             }
+
+            remove(txtPathS2E);
         }
     }
 
-    cmdFileS2E.close();
-    remove(txtPathS2E);
-
     if (terminateProgram) {
         return false;
-    } else if (updateIS) {
-        writeIS(cfg, odRcd, ccRcd);
+    } else if (updateIS) {  // handle updateIS set in both checkCmdOD and checkCmdCC
+        writeIS(cfg, odRcds, ccRcds);
         writeChImgs.clear();
         writeChImgs.resize(cfg.numChannels, true);
+
+        updateIS = false;
+    }
+
+    return true;
+}
+
+bool Logger::checkCmdCC(Config &cfg, vector<CCRecord> &ccRcds) {
+    if (!logEnable)
+        return true;
+
+    string filenameS2E = "cmds2e.txt";
+    string txtPathS2E = normLogPath(string(CONFIG_PATH)) + "/" + filenameS2E;
+    ifstream cmdFileS2E(txtPathS2E);
+
+    if (cmdFileS2E.is_open()) {
+        string line;
+        getline(cmdFileS2E, line);
+        stringstream ss(line);
+        cmdFileS2E.close();
+
+        int cmd;
+        ss >> cmd;
+
+        if (cmd == CMD_INSERT_CCZONE || cmd == CMD_MODIFY_CCZONE || cmd == CMD_REMOVE_CCZONE) {
+            lg(std::format("Get cmd: {} in checkCmdCC\n", line));
+
+            updateIS = true;  // this will be handled in checkCmdOD
+
+            switch (cmd) {
+                case CMD_INSERT_CCZONE: {
+                    CCZone ccZone;
+
+                    ccZone.enabled = true;
+                    ccZone.ccLevel = 0;
+                    ccZone.preCCLevel = 0;
+
+                    ss >> ccZone.ccZoneID;
+                    ss >> ccZone.vchID;
+
+                    int fH = cfg.frameHeights[ccZone.vchID];
+                    int fW = cfg.frameWidths[ccZone.vchID];
+
+                    for (int i = 0; i < 4; i++) {
+                        Point pt;
+                        ss >> pt.x;
+                        ss >> pt.y;
+                        ccZone.pts.push_back(pt);
+
+                        if (pt.x < 0 || pt.x >= fW) {
+                            lg(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
+                            return false;
+                        }
+
+                        if (pt.y < 0 || pt.y >= fH) {
+                            lg(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
+                            return false;
+                        }
+                    }
+
+                    ss >> ccZone.ccLevelThs[0];
+                    ss >> ccZone.ccLevelThs[1];
+                    ss >> ccZone.ccLevelThs[2];
+
+                    if (ccZone.ccLevelThs[0] > ccZone.ccLevelThs[1] || ccZone.ccLevelThs[1] > ccZone.ccLevelThs[2]) {
+                        cout << "ccLevelThs should be ordered(insert ccZone).\n";
+                        return false;
+                    }
+
+                    ccZone.ccNums.resize(cfg.ccWindowSize, 0);
+
+                    ccZone.maxCC = 0;
+                    ccZone.maxCCDay = 0;
+
+                    ccZone.init();
+
+                    // init mask with empty Mat. This is generated in CrowdCounter::runModel.
+                    ccZone.mask = cv::Mat();
+#ifdef _CPU_INFER
+                    ccZone.canvas = cv::Mat();
+                    ccZone.roiCanvas = cv::Mat();
+#endif
+
+                    bool duplicated = false;
+                    for (CCRecord &ccRcd : ccRcds) {
+                        if (ccRcd.vchID != ccZone.vchID)
+                            continue;
+
+                        for (auto &item : ccRcd.ccZones) {
+                            if (item.ccZoneID == ccZone.ccZoneID) {
+                                lg(std::format("duplicated zone(insert zone): {} {}\n", ccRcd.vchID, ccZone.ccZoneID));
+                                duplicated = true;
+                                break;
+                            }
+                        }
+
+                        if (!duplicated)
+                            ccRcd.ccZones.push_back(ccZone);
+
+#ifdef _CPU_INFER
+                        // Store only one ccZone for each vchID in CPU mode
+                        if (!ccRcd.ccZones.size() > 1) {
+                            lg(std::format("CCZone error!: Only one ccZone can be used in cpu mode\n"));
+                            continue;
+                        }
+#endif
+                    }
+
+                    break;
+                }
+                case CMD_MODIFY_CCZONE: {
+                    CCZone ccZone;
+
+                    ccZone.enabled = true;
+                    ccZone.ccLevel = 0;
+                    ccZone.preCCLevel = 0;
+
+                    ss >> ccZone.ccZoneID;
+                    ss >> ccZone.vchID;
+
+                    int fH = cfg.frameHeights[ccZone.vchID];
+                    int fW = cfg.frameWidths[ccZone.vchID];
+
+                    for (int i = 0; i < 4; i++) {
+                        Point pt;
+                        ss >> pt.x;
+                        ss >> pt.y;
+                        ccZone.pts.push_back(pt);
+
+                        if (pt.x < 0 || pt.x >= fW) {
+                            lg(std::format("zone.pts.x error: {} {}\n", pt.x, fW));
+                            return false;
+                        }
+
+                        if (pt.y < 0 || pt.y >= fH) {
+                            lg(std::format("zone.pts.y error: {} {}\n", pt.y, fH));
+                            return false;
+                        }
+                    }
+
+                    ss >> ccZone.ccLevelThs[0];
+                    ss >> ccZone.ccLevelThs[1];
+                    ss >> ccZone.ccLevelThs[2];
+
+                    if (ccZone.ccLevelThs[0] > ccZone.ccLevelThs[1] || ccZone.ccLevelThs[1] > ccZone.ccLevelThs[2]) {
+                        cout << "ccLevelThs should be ordered(modify ccZone).\n";
+                        return false;
+                    }
+
+                    for (CCRecord &ccRcd : ccRcds) {
+                        if (ccRcd.vchID != ccZone.vchID)
+                            continue;
+
+                        for (auto &item : ccRcd.ccZones) {
+                            if (item.ccZoneID == ccZone.ccZoneID) {
+                                std::copy(ccZone.pts.begin(), ccZone.pts.end(), item.pts.begin());
+                                item.ccLevelThs[0] = ccZone.ccLevelThs[0];
+                                item.ccLevelThs[1] = ccZone.ccLevelThs[1];
+                                item.ccLevelThs[2] = ccZone.ccLevelThs[2];
+
+                                item.mask = cv::Mat();
+#ifdef _CPU_INFER
+                                item.canvas = cv::Mat();
+                                item.roiCanvas = cv::Mat();
+#endif
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+                case CMD_REMOVE_CCZONE: {
+                    int ccZoneID, vchID;
+
+                    ss >> ccZoneID;
+                    ss >> vchID;
+
+                    if (vchID >= cfg.numChannels || vchID < 0) {
+                        lg(std::format("vchID error in remove ccZone: {} {}\n", vchID, cfg.numChannels));
+                        return false;
+                    }
+
+                    for (CCRecord &ccRcd : ccRcds) {
+                        if (ccRcd.vchID != vchID)
+                            continue;
+
+                        for (auto itr = ccRcd.ccZones.begin(); itr != ccRcd.ccZones.end();) {
+                            if (itr->ccZoneID == ccZoneID) {
+                                itr->enabled = false;
+                                itr->vchID = -1;
+                                itr = ccRcd.ccZones.erase(itr);
+                            } else
+                                ++itr;
+                        }
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+
+            remove(txtPathS2E);
+        }
     }
 
     return true;
@@ -1311,7 +1345,7 @@ void Logger::writeData(Config &cfg, ODRecord &odRcd, FDRecord &fdRcd, CCRecord &
             int smokeProb = fdRcd.smokeProbs.back() * 1000;
             int &afterFireEvent = fdRcd.afterFireEvent;
 
-            if ((fireProb > cfg.fdScoreTh) || (smokeProb > cfg.fdScoreTh)) {
+            if ((fireProb > cfg.fdScoreTh * 1000) || (smokeProb > cfg.fdScoreTh * 1000)) {
                 string filename = std::format("{:02}{:02}{:02}.txt", curTm->tm_hour, curTm->tm_min, curTm->tm_sec);
                 string txtPathFD =
                     normLogPath(string(FD_PATH)) + "/" + dayInfo + "/" + to_string(vchID) + "/txts/" + filename;

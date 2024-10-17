@@ -28,14 +28,14 @@
 #include "util.h"
 
 #define DRAW_DETECTION_INFO true
-#define DRAW_FIRE_DETECTION true
-#define DRAW_FIRE_DETECTION_COUNTING true
-#define DRAW_CNTLINE true
-#define DRAW_CNTLINE_COUNTING true
-#define DRAW_ZONE true
-#define DRAW_ZONE_COUNTING true
-#define DRAW_CC true
-#define DRAW_CC_COUNTING true
+#define DRAW_FIRE_DETECTION false
+#define DRAW_FIRE_DETECTION_COUNTING false
+#define DRAW_CNTLINE false
+#define DRAW_CNTLINE_COUNTING false
+#define DRAW_ZONE false
+#define DRAW_ZONE_COUNTING false
+#define DRAW_CC false
+#define DRAW_CC_COUNTING false
 
 using namespace std;
 using namespace cv;
@@ -127,8 +127,8 @@ int main() {
             int vchID = cframe.vchID;
             frameCnt = cframe.frameCnt;
 
-            if (!logger.checkCmd(cfg, odRcds[vchID], fdRcds[vchID], ccRcds[vchID])) {
-                cfg.lg("Break loop by checkCmdLogger\n");
+            if (!logger.checkCmdOD(cfg, odRcds, fdRcds, ccRcds)) {
+                cfg.lg("Break loop by checkCmdOD\n");
                 break;
             }
 
@@ -191,6 +191,11 @@ int main() {
                 if (threadStartCC + ccPeriod < frameCnt && ccTh == NULL) {
                     threadStartCC = frameCnt;
                     vchIDCC = vchID;
+
+                    if (!logger.checkCmdCC(cfg, ccRcds)) {  // handle cmd before calling CC thread
+                        cfg.lg("Break loop by checkCmdCC\n");
+                        break;
+                    }
 #ifndef _CPU_INFER
                     resize(frame, frameCC, Size(cfg.ccNetWidth, cfg.ccNetHeight));
                     ccTh = new thread(doRunModelCC, ref(density), ref(ccRcds[vchID]), ref(frameCC), vchID);
@@ -341,6 +346,8 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
             PedAtts::getGenderAtt(dbox.patts, isFemale, probFemale);
             boxColor = isFemale ? Scalar(80, 80, 255) : Scalar(255, 80, 80);
         }
+
+        boxColor = Scalar(0, 255, 0);  // for hsw
 
         if (DRAW_DETECTION_INFO) {
             // string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
