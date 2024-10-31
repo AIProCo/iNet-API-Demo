@@ -20,15 +20,6 @@
 // same config file for both windows and linux
 #define CFG_FILEPATH INPUT_DIRECTORY "config.json"
 
-#define CC_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.net"
-#define CC_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_cc_1_4_2.nez"
-#define OD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4_1.net"
-#define OD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_od_1_4_1.nez"
-#define FD_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_4.net"
-#define FD_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_fd_1_4_4.nez"
-#define PAR_MD_GPU_FILEPATH INPUT_DIRECTORY "aipro_par_1_4.net"
-#define PAR_MD_CPU_FILEPATH INPUT_DIRECTORY "aipro_par_1_4.nez"
-
 /// System
 #define PERSON 0  /// person should be the first object in a mapping list
 
@@ -100,44 +91,6 @@
 #define ADULT_GROUP 1
 #define ELDER_GROUP 2
 
-/// data structure
-#define LOG_ENABLE true
-
-#ifdef _WIN32
-#define AIPRO_PATH "c:/aipro/"
-#else
-#define AIPRO_PATH "aipro/"  // relative path to HOME directory,i.e, (home/<username>/aipro)
-#endif
-
-#define ROOT_PATH AIPRO_PATH "data/"
-#define CONFIG_PATH ROOT_PATH "config"
-#define CHIMGS_PATH ROOT_PATH "chimgs"
-#define CNT_PATH ROOT_PATH "cnt"
-#define CC_PATH ROOT_PATH "cc"
-#define FD_PATH ROOT_PATH "fd"
-#define LOG_PATH ROOT_PATH "log"
-#define VIDEO_OUT_PATH AIPRO_PATH "inet/videos"
-
-/// s2e commands
-#define CMD_INSERT_LINE 0
-#define CMD_MODIFY_LINE 1
-#define CMD_REMOVE_LINE 2
-#define CMD_INSERT_ZONE 3
-#define CMD_MODIFY_ZONE 4
-#define CMD_REMOVE_ZONE 5
-#define CMD_INSERT_CCZONE 6
-#define CMD_MODIFY_CCZONE 7
-#define CMD_REMOVE_CCZONE 8
-#define CMD_UPDATE_SCORETHS 50
-#define CMD_ENABLE_TARGET_LIVE_CHANNEL 51
-#define CMD_DISABLE_TARGET_LIVE_CHANNEL 52
-#define CMD_CLEARLOG 100
-#define CMD_REMOVE_ALL_LINES_ZONES 101
-#define CMD_REMOVE_ALL_LINES 102
-#define CMD_REMOVE_ALL_ZONES 103
-#define CMD_REMOVE_ALL_CCZONES 104
-#define CMD_TERMINATE_PROGRAM 200
-
 /// IS_MODE
 #define IS_PEOPLE_COUNTING 0
 #define IS_RESTRICTED_AREA 1
@@ -151,8 +104,8 @@ struct Zone {
     int vchID;     /// vchID where the zone exists
 
     int isMode;    /// IS mode(0: people counting, 1: restricted area)
-    int preTotal;  /// for internal usage in logger
-    int state;     /// for internal usage in logger(0: no people, 1: transition, 2: people)
+    int preTotal;  /// for internal usage in external server
+    int state;     /// for internal usage in external server(0: no people, 1: transition, 2: people)
 
     std::vector<cv::Point> pts;                  /// corner points (should be larger than 2)
     int curPeople[NUM_GENDERS][NUM_AGE_GROUPS];  /// current people in the zone
@@ -165,12 +118,16 @@ struct Zone {
                 curPeople[g][a] = 0;
             }
         }
+
+        preTotal = 0;
     }
+
     int getTotal() {
         int total = 0;
         for (int g = 0; g < NUM_GENDERS; g++)
             for (int a = 0; a < NUM_AGE_GROUPS; a++)
                 total += curPeople[g][a];
+
         return total;
     }
 };
@@ -195,6 +152,17 @@ struct CntLine {
                 totalDR[g][a] = 0;
             }
         }
+
+        preTotal = 0;
+    }
+
+    int getTotal() {
+        int total = 0;
+        for (int g = 0; g < NUM_GENDERS; g++)
+            for (int a = 0; a < NUM_AGE_GROUPS; a++)
+                total += (totalUL[g][a] + totalDR[g][a]);
+
+        return total;
     }
 };
 
@@ -268,13 +236,12 @@ struct CCZone {
         cv::fillConvexPoly(mask, movedPts, cv::Scalar(1, 1, 1));
     }
 #endif
-    int maxCC;                              /// for internal usage in logger
-    int maxCCDay;                           /// for internal usage in logger
-    int accCCLevels[NUM_CC_LEVELS - 1];     /// for internal usage in logger
-    int accCCLevelsDay[NUM_CC_LEVELS - 1];  /// for internal usage in logger
+    int maxCC;                              /// for internal usage in external server
+    int maxCCDay;                           /// for internal usage in external server
+    int accCCLevels[NUM_CC_LEVELS - 1];     /// for internal usage in external server
+    int accCCLevelsDay[NUM_CC_LEVELS - 1];  /// for internal usage in external server
 
     std::deque<int> ccNums;
-    double avgWindow;
 
     void init() {
         for (int i = 0; i < NUM_CC_LEVELS - 1; i++) {
@@ -297,7 +264,7 @@ struct CCZone {
         ccNums.push_back(ccNum);
 
         int sum = std::reduce(ccNums.begin(), ccNums.end());
-        avgWindow = (double)sum / ccNums.size();
+        double avgWindow = (double)sum / ccNums.size();
         int average = avgWindow + 0.5;
 
         ccLevel = 0;
@@ -322,7 +289,7 @@ struct FDRecord {
     std::deque<float> smokeProbs;  // smoke probability
     int fireEvent;                 // fire event
     int smokeEvent;                // smoke event
-    int afterFireEvent;            // for internal usage in logger
+    int afterFireEvent;            // for internal usage in external server
 };
 
 struct CCRecord {
@@ -403,14 +370,6 @@ struct DetBox {
 };
 
 struct Config {
-    // for logger. logFile and lg can be used after creating Logger
-    std::ofstream *pLogFile;
-    void lg(std::string msg) {
-        std::cout << msg;
-        if (pLogFile != NULL)
-            (*pLogFile) << msg;
-    }
-
     std::string key;                       /// authorization Key
     uint frameLimit;                       /// number of frames to be processed
     std::vector<std::string> inputFiles;   /// list of the input files
@@ -419,19 +378,16 @@ struct Config {
     bool debugMode;                        /// output debug info and frames
     bool boostMode;                        /// enable boost mode(minimize delay)
     bool igpuEnable;                       /// use igpu if present
-    bool logEnable;
 
     // config
-    int maxBufferSize;              /// maximun input buffer size
     int numChannels;                /// number of video channels (unlimited)
-    std::vector<int> vchStates;     /// vch states (0: non-connected, 1: connected)
     std::vector<int> frameWidths;   /// widths of the input frames
     std::vector<int> frameHeights;  /// heights of the input frames
     std::vector<float> fpss;        /// fpss of the input frames
 
     // od config
     bool odEnable;            /// Enable object detection and tracking
-    std::string odModelFile;  /// path to the od config file (ex:aipro_b5.trt)
+    std::string odModelFile;  /// path to the od model file (ex:aipro_od_1_1.trt)
     int odNetWidth;           /// width of the od model input
     int odNetHeight;          /// height of the od model input
     std::vector<float> odScaleFactors;
@@ -447,15 +403,13 @@ struct Config {
 
     // fd config
     bool fdEnable;            /// Enable fire detection and tracking
-    std::string fdModelFile;  /// path to the od config file (ex:aipro_b5.trt)
+    std::string fdModelFile;  /// path to the fd config file (ex:aipro_fd_1_1.net)
     int fdNetWidth;           /// width of the fd model input
     int fdNetHeight;          /// height of the fd model input
     std::vector<float> fdScaleFactors;
-    std::vector<float> fdScaleFactorsInv;
     float fdScoreTh;   /// threshold for filtering low confident detections
     int fdBatchSize;   /// batch size of the fd model
     int fdWindowSize;  /// window size for fire and smoke detection history
-    std::vector<std::string> fdIDMapping;
     int fdNumClasses;  /// number of classes
     int fdPeriod;      /// fire detection period
 
@@ -480,58 +434,7 @@ struct Config {
     int ccNetWidth;   /// width of the crowd counting model input
     int ccNetHeight;  /// height of the crowd counting model input
     std::vector<float> ccScaleFactors;
-    std::vector<float> ccScaleFactorsInv;
     std::string ccModelFile;  /// crowd counting model file
     int ccWindowSize;
     int ccPeriod;  /// fire detection period
 };
-
-class DebugMessage {
-   public:
-    Config *pCfg;
-
-    DebugMessage(Config &cfg) {
-        pCfg = &cfg;
-    }
-    void lg(std::string msg) {
-        pCfg->lg(msg);
-    }
-};
-
-class CMat {
-   public:
-    cv::Mat frame;
-    int vchID;
-    unsigned int frameCnt;
-
-   public:
-    CMat() {
-        vchID = -1;
-        frameCnt = 0;
-    }
-
-    CMat(cv::Mat &frame, int vchID, unsigned int frameCnt) {
-        set(frame, vchID, frameCnt);
-    }
-
-    void get(cv::Mat &_frame, int &_vchID, unsigned int &_frameCnt) {
-        _frame = frame;
-        _vchID = vchID;
-        _frameCnt = frameCnt;
-    }
-
-    // Only one thread/writer can reset/write the counter's value.
-    void set(cv::Mat &_frame, int _vchID, unsigned int _frameCnt) {
-        frame = _frame;
-        vchID = _vchID;
-        frameCnt = _frameCnt;
-    }
-};
-
-#ifdef _WIN32
-#include <concurrent_queue.h>
-typedef concurrency::concurrent_queue<CMat> CMats;
-#else
-#include <tbb/concurrent_queue.h>
-typedef tbb::concurrent_queue<CMat> CMats;
-#endif

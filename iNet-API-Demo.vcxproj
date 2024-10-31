@@ -95,16 +95,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="camerastreamer.cpp" />
-    <ClCompile Include="logger.cpp" />
+    <ClCompile Include="videostreamer.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="camerastreamer.hpp" />
+    <ClInclude Include="videostreamer.hpp" />
     <ClInclude Include="include\generator.h" />
     <ClInclude Include="include\global.h" />
     <ClInclude Include="include\util.h" />
-    <ClInclude Include="logger.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="inputs\config.json" />

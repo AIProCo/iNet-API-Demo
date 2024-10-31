@@ -8,7 +8,6 @@
 #include <filesystem>
 #include <format>
 #include <chrono>
-#include <thread>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -21,35 +20,29 @@
 // core
 #include "global.h"
 #include "generator.h"
-#include "camerastreamer.hpp"
-#include "logger.h"
+#include "videostreamer.hpp"
 
 // util
 #include "util.h"
 
 #define DRAW_DETECTION_INFO true
-#define DRAW_FIRE_DETECTION false
-#define DRAW_FIRE_DETECTION_COUNTING false
-#define DRAW_CNTLINE false
-#define DRAW_CNTLINE_COUNTING false
-#define DRAW_ZONE false
-#define DRAW_ZONE_COUNTING false
-#define DRAW_CC false
-#define DRAW_CC_COUNTING false
+#define DRAW_FIRE_DETECTION true
+#define DRAW_FIRE_DETECTION_COUNTING true
+#define DRAW_CNTLINE true
+#define DRAW_CNTLINE_COUNTING true
+#define DRAW_ZONE true
+#define DRAW_ZONE_COUNTING true
+#define DRAW_CC true
+#define DRAW_CC_COUNTING true
 
 using namespace std;
 using namespace cv;
+using namespace std::chrono;
 
 void drawZones(Config &cfg, ODRecord &odRcd, Mat &img, int vchID, double alpha);
 void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha = 0.7);
 void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh);
 void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID);
-
-void doRunModelFD(FDRecord &fdRcd, Mat &frame, int vchID);
-void doRunModelCC(Mat &density, CCRecord &ccRcd, Mat &frame, int vchID);
-
-std::atomic<bool> ccTreadDone = false;
-std::atomic<bool> fdTreadDone = false;
 
 // start engine
 int main() {
@@ -67,220 +60,130 @@ int main() {
         cout << e.what() << endl;
     }
 
-    int numFDChannels = 0, numCCChannels = 0;
-    for (int i = 0; i < cfg.numChannels; i++) {
-        if (cfg.fdChannels[i])
-            numFDChannels++;
-
-        if (cfg.ccChannels[i])
-            numCCChannels++;
-    }
-
-    int fdMinPeriod, ccMinPeriod;
-    if (cfg.boostMode) {  // cfg.boostMode
-        fdMinPeriod = 1, ccMinPeriod = 1;
-    } else {
-        fdMinPeriod = 10, ccMinPeriod = 17;
-    }
-    int fdPeriod = fdMinPeriod, ccPeriod = ccMinPeriod;
-
-    Logger logger(cfg);  // should be made before initModel and streamer
-
     if (!initModel(cfg)) {
         cout << "initModel: Initialization of the solution failed!\n";
         return -1;
     }
 
-    CameraStreamer streamer(cfg, odRcds, ccRcds, &logger);
+    VideoStreamer streamer(cfg, odRcds, ccRcds);
 
-    unsigned int frameCnt = 0;
+    vector<unsigned int> frameCnts;
+    frameCnts.resize(cfg.numChannels, 0);
     unsigned int frameLimit = cfg.frameLimit;  // number of frames to be processed
-    int vchIDFD = -1, vchIDCC = -1;
 
-    steady_clock::time_point start, end;
-    vector<int> infs;
-    int sleepPeriodMain = 0;
-    vector<unsigned int> threadStartFDs(cfg.numChannels, 0);
-    vector<unsigned int> threadStartCCs(cfg.numChannels, 0);
-    thread *fdTh = NULL, *ccTh = NULL;
+    steady_clock::time_point start, endOD, endFD, endCC;
+    vector<int> delayODs, delayFDs, delayCCs;
 
-    vector<Mat> densityChPre(cfg.numChannels);
-    Mat density;
-
-    Mat frameFD(NET_HEIGHT_FD, NET_WIDTH_FD, CV_8UC3);
-#ifndef _CPU_INFER
-    Mat frameCC(NET_HEIGHT_CC, NET_WIDTH_CC, CV_8UC3);
-#else
-    Mat frameCC;
-#endif
-
-    int tVchID = 0;
+    int vchID = 0;
     while (1) {
-        if (sleepPeriodMain > 0)
-            this_thread::sleep_for(chrono::milliseconds(sleepPeriodMain));
+        Mat frame;
 
-        if (!streamer.empty(tVchID)) {
-            CMat cframe;
-            streamer.tryPop(cframe, tVchID);  // get a new cframe
-
-            Mat frame = cframe.frame;  // fix odBatchSize to 1
-            int vchID = cframe.vchID;
-            frameCnt = cframe.frameCnt;
-
-            if (!logger.checkCmdOD(cfg, odRcds, fdRcds, ccRcds)) {
-                cfg.lg("Break loop by checkCmdOD\n");
-                break;
-            }
-
-            int ccNumFrame = 0;
-            system_clock::time_point now = system_clock::now();
-            start = steady_clock::now();
-
-            if (cfg.fdChannels[vchID]) {
-                unsigned int &threadStartFD = threadStartFDs[vchID];
-
-                if (fdTh != NULL && fdTreadDone && vchID == vchIDFD) {
-                    fdTreadDone = false;
-
-                    fdTh->join();
-                    fdTh = NULL;
-
-                    bool periodChanged = true;
-                    int threadGap = frameCnt - threadStartFD;
-                    if (fdPeriod < (numFDChannels - 1) * threadGap)
-                        ++fdPeriod;
-                    else if (fdPeriod > numFDChannels * threadGap && fdPeriod > fdMinPeriod)
-                        --fdPeriod;
-                    else
-                        periodChanged = false;
-
-                    threadStartFD = frameCnt;  // for the following if-statement
-                }
-
-                if (threadStartFD + fdPeriod < frameCnt && fdTh == NULL) {
-                    resize(frame, frameFD, Size(cfg.fdNetWidth, cfg.fdNetHeight));
-                    threadStartFD = frameCnt;
-                    vchIDFD = vchID;
-                    fdTh = new thread(doRunModelFD, ref(fdRcds[vchID]), ref(frameFD), vchID);
-                }
-            }
-
-            if (cfg.ccChannels[vchID]) {
-                unsigned int &threadStartCC = threadStartCCs[vchID];
-
-                if (ccTh != NULL && ccTreadDone && vchID == vchIDCC) {
-                    ccTreadDone = false;
-
-                    ccTh->join();
-                    ccTh = NULL;
-
-                    densityChPre[vchIDCC] = density;
-
-                    bool periodChanged = true;
-                    int threadGap = frameCnt - threadStartCC;
-                    if (ccPeriod < (numCCChannels - 1) * threadGap)
-                        ++ccPeriod;
-                    else if (ccPeriod > numCCChannels * threadGap && ccPeriod > ccMinPeriod)
-                        --ccPeriod;
-                    else
-                        periodChanged = false;
-
-                    threadStartCC = frameCnt;  // for the following if-statement
-                }
-
-                if (threadStartCC + ccPeriod < frameCnt && ccTh == NULL) {
-                    threadStartCC = frameCnt;
-                    vchIDCC = vchID;
-
-                    if (!logger.checkCmdCC(cfg, ccRcds)) {  // handle cmd before calling CC thread
-                        cfg.lg("Break loop by checkCmdCC\n");
-                        break;
-                    }
-#ifndef _CPU_INFER
-                    resize(frame, frameCC, Size(cfg.ccNetWidth, cfg.ccNetHeight));
-                    ccTh = new thread(doRunModelCC, ref(density), ref(ccRcds[vchID]), ref(frameCC), vchID);
-#else
-                    ccRcds[vchID].ccZones[0].setCanvas(frame);  // only one ccZone
-                    ccTh = new thread(doRunModelCC, ref(density), ref(ccRcds[vchID]), ref(frameCC), vchID);
-#endif
-                }
-            }
-
-            vector<DetBox> dboxes;
-            if (cfg.odChannels[vchID])
-                runModel(dboxes, odRcds[vchID], frame, vchID, frameCnt, cfg.odScoreTh);
-
-            end = chrono::steady_clock::now();
-
-            bool needToDraw = logger.needToDraw(vchID);
-            if (needToDraw || cfg.recording) {
-                if (cfg.odChannels[vchID])
-                    drawBoxes(cfg, odRcds[vchID], frame, dboxes, vchID);
-
-                if (cfg.fdChannels[vchID])
-                    drawFD(cfg, fdRcds[vchID], frame, vchID, cfg.fdScoreTh);
-
-                if (cfg.ccChannels[vchID])
-                    drawCC(cfg, ccRcds[vchID], densityChPre[vchID], frame, vchID);
-            }
-
-            if (cfg.recording)
-                streamer.write(frame, vchID);  // write a frame to the output video
-
-            logger.writeData(cfg, odRcds[vchID], fdRcds[vchID], ccRcds[vchID], frame, frameCnt, vchID, now);
-
-            int inf = chrono::duration_cast<chrono::milliseconds>(end - start).count();
-
-            if (frameCnt % 20 == 0)
-                cfg.lg(std::format("[{}]Frame{:>4}>  SP({:>2}, {:>3}), Gap(FD: {}, CC: {}),  Buf: {},  Inf: {}ms\n",
-                                   vchID, frameCnt, sleepPeriodMain, streamer.unsafeSize(vchID), fdPeriod, ccPeriod,
-                                   streamer.unsafeSize(vchID), inf));
-
-            if (frameCnt > 10 && frameCnt < 100)  // skip the start frames and limit the number of elements
-                infs.push_back(inf);
-        }
-
-        tVchID++;
-        if (tVchID >= cfg.numChannels)
-            tVchID = 0;
-
-        if (streamer.unsafeSizeMax() > 0) {
-            sleepPeriodMain = 0;
-        } else {
-            if (sleepPeriodMain < 10)
-                sleepPeriodMain += 2;
-        }
-
-        if (frameLimit > 0 && frameCnt > frameLimit) {
-            cfg.lg(std::format("\nBreak loop at frameCnt={:>4} and frameLimit={:>4}\n", frameCnt, frameLimit));
+        if (!streamer.read(frame, vchID)) {
+            cout << "End of Videos!\n";
             break;
         }
+
+        unsigned int &frameCnt = frameCnts[vchID];
+
+        start = steady_clock::now();
+
+        // object detection and tracking
+        vector<DetBox> dboxes;
+        if (cfg.odChannels[vchID])
+            runModel(dboxes, odRcds[vchID], frame, vchID, frameCnt, cfg.odScoreTh);
+
+        endOD = steady_clock::now();
+
+        // fire classification
+        if (cfg.fdChannels[vchID]) {
+            runModelFD(fdRcds[vchID], frame, vchID);
+        }
+
+        endFD = steady_clock::now();
+
+        // crowd counting
+        Mat density;
+        if (cfg.ccChannels[vchID]) {
+#ifndef _CPU_INFER
+            runModelCC(density, ccRcds[vchID], frame, vchID);
+#else
+            if (ccRcds[vchID].ccZones.size() > 0) {
+                ccRcds[vchID].ccZones[0].setCanvas(frame);  // only one ccZone
+                runModelCC(density, ccRcds[vchID], frame, vchID);
+            }
+#endif
+        }
+
+        endCC = steady_clock::now();
+
+        if (cfg.recording) {
+            if (cfg.odChannels[vchID])
+                drawBoxes(cfg, odRcds[vchID], frame, dboxes, vchID);
+
+            if (cfg.fdChannels[vchID])
+                drawFD(cfg, fdRcds[vchID], frame, vchID, cfg.fdScoreTh);
+
+            if (cfg.ccChannels[vchID])
+                drawCC(cfg, ccRcds[vchID], density, frame, vchID);
+
+            streamer.write(frame, vchID);  // write a frame to the output video
+        }
+
+        int delay = duration_cast<milliseconds>(endCC - start).count();
+        int delayOD = duration_cast<milliseconds>(endOD - start).count();
+        int delayFD = duration_cast<milliseconds>(endFD - endOD).count();
+        int delayCC = duration_cast<milliseconds>(endCC - endFD).count();
+
+        cout << std::format("[{}]Frame{:>4}>  Inference Delay: {:>2}ms (OD: {:>2}ms, FD: {:>2}ms, CC: {:>2}ms)\n",
+                            vchID, frameCnt, delay, delayOD, delayFD, delayCC);
+
+        if (frameCnt > 10 && frameCnt < 100) {  // skip the start frames and limit the number of elements
+            if (cfg.odChannels[vchID])
+                delayODs.push_back(delayOD);
+
+            if (cfg.fdChannels[vchID])
+                delayFDs.push_back(delayFD);
+
+            if (cfg.ccChannels[vchID])
+                delayCCs.push_back(delayCC);
+        }
+
+        frameCnt++;
+        if (frameLimit > 0 && frameCnt > frameLimit) {
+            cout << std::format("\nBreak loop at frameCnt={:>4} and frameLimit={:>4}\n", frameCnt, frameLimit);
+            break;
+        }
+
+        vchID++;
+        if (vchID >= cfg.numChannels)
+            vchID = 0;
     }
 
-    if (fdTh)
-        fdTh->join();
+    if (delayODs.size() > 0 || delayFDs.size() > 0 || delayCCs.size() > 0) {
+        float avgDelayOD = 0.0f, avgDelayFD = 0.0f, avgDelayCC = 0.0f;
 
-    if (ccTh)
-        ccTh->join();
+        if (delayODs.size() > 0)
+            avgDelayOD = accumulate(delayODs.begin(), delayODs.end(), 0) / delayODs.size();
+        if (delayFDs.size() > 0)
+            avgDelayFD = accumulate(delayFDs.begin(), delayFDs.end(), 0) / delayFDs.size();
+        if (delayCCs.size() > 0)
+            avgDelayCC = accumulate(delayCCs.begin(), delayCCs.end(), 0) / delayCCs.size();
 
-    if (infs.size() > 1) {
-        float avgInf = accumulate(infs.begin(), infs.end(), 0) / infs.size();
-        cfg.lg(std::format("\nAverage Inference Time: {}ms\n", avgInf));
+        float avgDelay = avgDelayOD + avgDelayFD + avgDelayCC;
+        cout << std::format("\nAverage Delay: {:>2}ms (OD: {:>2}ms, FD: {:>2}ms, CC: {:>2}ms)\n", avgDelay, avgDelayOD,
+                            avgDelayFD, avgDelayCC);
     }
 
     if (cfg.recording) {
-        cfg.lg("\nOutput file(s):\n");
+        cout << "\nOutput file(s):\n";
         for (auto &outFile : cfg.outputFiles)
-            cfg.lg(std::format("  -{}\n", outFile));
+            cout << std::format("  -{}\n", outFile);
     }
 
     destroyModel();      // destroy all models
-    logger.destroy();    // destroy logger
     streamer.destroy();  // destroy streamer
 
-    cfg.lg("\nTerminate program!\n");
-    if (cfg.pLogFile && cfg.pLogFile->is_open())
-        cfg.pLogFile->close();
+    cout << "\nTerminate program!\n";
 
     return 0;
 }
@@ -347,7 +250,7 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
             boxColor = isFemale ? Scalar(80, 80, 255) : Scalar(255, 80, 80);
         }
 
-        boxColor = Scalar(0, 255, 0);  // for hsw
+        // boxColor = Scalar(0, 255, 0); //for hsw
 
         if (DRAW_DETECTION_INFO) {
             // string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
@@ -578,8 +481,7 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
         for (CCZone &ccZone : ccRcd.ccZones) {
             string text =
                 // std::format(" -CZone {}: {:>4}", ccZone.ccZoneID+1, ccZone.ccNums.back());
-                std::format("  CZone {}:{:>7}(L{} {:.2f})", ccZone.ccZoneID, ccZone.ccNums.back(), ccZone.ccLevel,
-                            ccZone.avgWindow);
+                std::format("  CZone {}:{:>7}(L{})", ccZone.ccZoneID, ccZone.ccNums.back(), ccZone.ccLevel);
             ccTexts.push_back(text);
         }
 
@@ -589,19 +491,4 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID) {
         // vector<string> tmp0 = {string("CZone 1")};
         // Vis::drawTextBlock2(img, Point(800, 200), tmp0, 1, 2);
     }
-}
-
-void doRunModelFD(FDRecord &fdRcd, Mat &frame, int vchID) {
-    runModelFD(fdRcd, frame, vchID);
-    fdTreadDone = true;
-}
-
-void doRunModelCC(Mat &density, CCRecord &ccRcd, Mat &frame, int vchID) {
-    // chrono::steady_clock::time_point start, end;
-    // start = std::chrono::steady_clock::now();
-    runModelCC(density, ccRcd, frame, vchID);
-    // end = std::chrono::steady_clock::now();
-    // int inf = chrono::duration_cast<chrono::milliseconds>(end - start).count();
-    // cout << " Crowd Counting Inference time: " << inf << "ms\n";
-    ccTreadDone = true;
 }

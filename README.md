@@ -12,7 +12,6 @@
 # Licensing and Restrictions
 
 - Commercial use must be approved by AIPro Inc. 
-- The inference speed is limited to 10fps for each channel.
 - The maximum number of inferences for all channels is set to 10000.
 - (Important!!) there are several hidden features to prevent illegal use in this repository.
   
@@ -32,8 +31,8 @@
 ### **Download and extract files**
 - Download and upzip one of the followings zip files. Then, copy and paste bin, inputs, and videos directories to the solution directory (the directory including the `.sln` file):
   + Cuda compute capability of your GPU should be 8.6(RTX-30xx) or 8.9(RTX-40xx): 
-    - RTX-30xx: https://drive.google.com/file/d/1BMSuX3T0Y6nMI6pvWnAfGdmLtDR2NV8q/view?usp=sharing
-    - RTX-40xx: https://drive.google.com/file/d/1CogRPPAQiTE8_9_ellvct4i0jDw25YUC/view?usp=sharing
+    - RTX-30xx: https://drive.google.com/file/d/15YnBMVcO9F6ETf__jJ8up6VVPuRUWj2z/view?usp=sharing
+    - RTX-40xx: https://drive.google.com/file/d/10Le-OIie2RH7gfZBq7GQ1BtvVp7pPmbt/view?usp=sharing
     
 ### **Run the project**
 
