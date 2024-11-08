@@ -95,6 +95,11 @@
 #define IS_PEOPLE_COUNTING 0
 #define IS_RESTRICTED_AREA 1
 
+/// MIN_OBJECT_MODE
+#define MIN_OBJ_NONE 0
+#define MIN_OBJ_IN_DLL 1
+#define MIN_OBJ_IN_DRAW 2
+
 typedef unsigned char uchar;
 typedef unsigned int uint;
 
@@ -287,9 +292,9 @@ struct FDRecord {
     int vchID;
     std::deque<float> fireProbs;   // fire probability
     std::deque<float> smokeProbs;  // smoke probability
-    int fireEvent;                 // fire event
-    int smokeEvent;                // smoke event
-    int afterFireEvent;            // for internal usage in external server
+    // int fireEvent;                 // fire event
+    // int smokeEvent;                // smoke event
+    int afterFireEvent;  // for internal usage in external server
 };
 
 struct CCRecord {
@@ -369,6 +374,18 @@ struct DetBox {
     PedAtts patts;  /// PAR info
 };
 
+struct MinObj {
+    int vchID;
+    int mode;    /// 0(default):none, 1: in dll, 2: in draw
+    int ths[4];  /// 4 partitions
+
+    void init(int _vchID = -1) {
+        vchID = _vchID;
+        mode = 0;
+        ths[0] = ths[1] = ths[2] = ths[3] = 0;
+    }
+};
+
 struct Config {
     std::string key;                       /// authorization Key
     uint frameLimit;                       /// number of frames to be processed
@@ -397,6 +414,7 @@ struct Config {
     std::vector<std::string> odIDMapping;
     int numClasses;  /// number of classes
 
+    // channel selection
     std::vector<bool> odChannels;  /// flags for indicating object detection channels
     std::vector<bool> fdChannels;  /// flags for indicating fire detection channels
     std::vector<bool> ccChannels;  /// flags for indicating crowd counting channels

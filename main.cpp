@@ -40,7 +40,8 @@ using namespace cv;
 using namespace std::chrono;
 
 void drawZones(Config &cfg, ODRecord &odRcd, Mat &img, int vchID, double alpha);
-void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha = 0.7);
+void drawBoxes(Config &cfg, ODRecord &odRcd, MinObj &minObj, Mat &img, vector<DetBox> &dboxes, int vchID,
+               double alpha = 0.7);
 void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh);
 void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID);
 
@@ -50,9 +51,10 @@ int main() {
     vector<ODRecord> odRcds;  // for each vchID
     vector<FDRecord> fdRcds;  // for each vchID
     vector<CCRecord> ccRcds;  // for each vchID
+    vector<MinObj> minObjs;   // for each vchID
 
     try {
-        if (!parseConfigAPI(cfg, odRcds, fdRcds, ccRcds)) {  // parse config.json, cam.json, and is.txt
+        if (!parseConfigAPI(cfg, odRcds, fdRcds, ccRcds, minObjs)) {  // parse config.json, cam.json, and is.txt
             cout << "parseConfigAPI: Parsing Error!\n";
             return -1;
         }
@@ -90,7 +92,7 @@ int main() {
         // object detection and tracking
         vector<DetBox> dboxes;
         if (cfg.odChannels[vchID])
-            runModel(dboxes, odRcds[vchID], frame, vchID, frameCnt, cfg.odScoreTh);
+            runModel(dboxes, odRcds[vchID], minObjs[vchID], frame, vchID, frameCnt, cfg.odScoreTh);
 
         endOD = steady_clock::now();
 
@@ -118,7 +120,7 @@ int main() {
 
         if (cfg.recording) {
             if (cfg.odChannels[vchID])
-                drawBoxes(cfg, odRcds[vchID], frame, dboxes, vchID);
+                drawBoxes(cfg, odRcds[vchID], minObjs[vchID], frame, dboxes, vchID);
 
             if (cfg.fdChannels[vchID])
                 drawFD(cfg, fdRcds[vchID], frame, vchID, cfg.fdScoreTh);
@@ -216,7 +218,8 @@ void drawZones(Config &cfg, ODRecord &odRcd, Mat &img, int vchID, double alpha) 
     }
 }
 
-void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, int vchID, double alpha) {
+void drawBoxes(Config &cfg, ODRecord &odRcd, MinObj &minObj, Mat &img, vector<DetBox> &dboxes, int vchID,
+               double alpha) {
     const string *objNames = cfg.odIDMapping.data();
     time_t now = time(NULL);
 
@@ -239,8 +242,11 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
         Scalar boxColor(50, 255, 255);
         vector<string> texts;
 
-        if (dbox.objID == 8)
-            boxColor = Scalar(255, 50, 255);
+        int partitionIdx = (dbox.y + dbox.h) / (img.rows / 4);  //(dbox.y + dbox.h): 0 ~ H-1
+        if (minObj.mode == MIN_OBJ_IN_DRAW) {
+            if ((minObj.ths[partitionIdx] > 0) && (dbox.h * dbox.w < minObj.ths[partitionIdx]))
+                boxColor = Scalar(230, 255, 20);  // ignored box;
+        }
 
         bool isFemale;
         int probFemale;
@@ -255,7 +261,9 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, Mat &img, vector<DetBox> &dboxes, i
         if (DRAW_DETECTION_INFO) {
             // string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
             string objName =
-                to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
+                std::format("{}({:.1f}):{}({})", objNames[label], dbox.prob * 100 + 0.5, dbox.w * dbox.h, partitionIdx);
+            // string objName = to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 +
+            // 0.5)) + "%)";
             // string objName = to_string(dbox.trackID);
 
             // char buf[80];

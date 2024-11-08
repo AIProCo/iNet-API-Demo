@@ -47,41 +47,6 @@ inline void universal_sleep(long long ms) {
 #endif
 }
 
-/// @brief  A utility class to work with files and directories
-class FileUtil {
-   public:
-    // get Home directory of current user in Linux
-    static std::string getHomeDirPath() {
-        return fs::path(getenv("HOME")).string();
-    }
-
-    // get current working directory of executable file
-    static std::string getExecDirPath() {
-#ifdef _WIN32
-        char buffer[MAX_PATH];
-        GetModuleFileNameA(NULL, buffer, MAX_PATH);
-        fs::path p(buffer);
-        return p.parent_path().string();
-#else
-        char result[PATH_MAX];
-        ssize_t count = readlink("/proc/self/exe", result, PATH_MAX);
-        return fs::path(std::string(result, (count > 0) ? count : 0)).parent_path().string();
-#endif
-    }
-
-    static std::string universalNormPath(const std::string &relativePath, fs::path baseDir = "") {
-#ifdef _WIN32
-        // not needed, just return relativePath
-        return relativePath;
-#else
-        // for Linux; combine baseDir and relativePath to get absolute path
-        fs::path combinedPath = baseDir / relativePath;
-        fs::path absolutePath = fs::absolute(combinedPath);
-        return fs::weakly_canonical(absolutePath).string();
-#endif
-    }
-};
-
 /// @brief an utility class to visualize the results
 class Vis {
    public:
@@ -107,9 +72,16 @@ class Vis {
                 /// calculate boxs
                 Size bboxTexts = getBoxForTexts(texts[i], fontFace, fontScale, thickness, vSpace, hSpace);
 
-                /// filled boxes (to show text info));
-                Point topLeftBox = Point(r, t + textBlockTopOffset);
-                Point rightBottomBox = Point(r + bboxTexts.width, t + bboxTexts.height + textBlockTopOffset);
+                Point topLeftBox, rightBottomBox;
+                if (r + bboxTexts.width < matImg.cols) {
+                    /// filled boxes (to show text info));
+                    topLeftBox = Point(r, t + textBlockTopOffset);
+                    rightBottomBox = Point(r + bboxTexts.width, t + bboxTexts.height + textBlockTopOffset);
+                } else {
+                    topLeftBox = Point(l - bboxTexts.width, t + textBlockTopOffset);
+                    rightBottomBox = Point(l, t + bboxTexts.height + textBlockTopOffset);
+                }
+
                 rectangle(matImg, topLeftBox, rightBottomBox, boxColors[i], FILLED);
 
                 /// draw texts
@@ -403,16 +375,41 @@ class PPrint {
     }
 };
 
-class TimeUtil {
+#ifndef _WIN32
+/// @brief  A utility class to work with files and directories
+class FileUtil {
    public:
-    static TimePoint now() {
-        return std::chrono::steady_clock::now();
+    // get Home directory of current user in Linux
+    static std::string getHomeDirPath() {
+        return fs::path(getenv("HOME")).string();
     }
-    static long long duration(TimePoint start, TimePoint end) {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+    // get current working directory of executable file
+    static std::string getExecDirPath() {
+#ifdef _WIN32
+        char buffer[MAX_PATH];
+        GetModuleFileNameA(NULL, buffer, MAX_PATH);
+        fs::path p(buffer);
+        return p.parent_path().string();
+#else
+        char result[PATH_MAX];
+        ssize_t count = readlink("/proc/self/exe", result, PATH_MAX);
+        return fs::path(std::string(result, (count > 0) ? count : 0)).parent_path().string();
+#endif
     }
-    static long long elapsed(TimePoint start) {
-        return duration(start, now());
+
+    static std::string universalNormPath(const std::string &relativePath, fs::path baseDir = "") {
+#ifdef _WIN32
+        // not needed, just return relativePath
+        return relativePath;
+#else
+        // for Linux; combine baseDir and relativePath to get absolute path
+        fs::path combinedPath = baseDir / relativePath;
+        fs::path absolutePath = fs::absolute(combinedPath);
+        return fs::weakly_canonical(absolutePath).string();
+#endif
     }
 };
+#endif
+
 #endif  // UTIL_H
