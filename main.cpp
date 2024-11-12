@@ -42,7 +42,7 @@ using namespace std::chrono;
 void drawZones(Config &cfg, ODRecord &odRcd, Mat &img, int vchID, double alpha);
 void drawBoxes(Config &cfg, ODRecord &odRcd, MinObj &minObj, Mat &img, vector<DetBox> &dboxes, int vchID,
                double alpha = 0.7);
-void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh);
+void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreThFire, float fdScoreThSmoke);
 void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID);
 
 // start engine
@@ -77,6 +77,7 @@ int main() {
     vector<int> delayODs, delayFDs, delayCCs;
 
     int vchID = 0;
+    int minObjCnt = 0;
     while (1) {
         Mat frame;
 
@@ -91,8 +92,13 @@ int main() {
 
         // object detection and tracking
         vector<DetBox> dboxes;
-        if (cfg.odChannels[vchID])
-            runModel(dboxes, odRcds[vchID], minObjs[vchID], frame, vchID, frameCnt, cfg.odScoreTh);
+        if (cfg.odChannels[vchID]) {
+            int minObjSize = 0;  // set only when minObjs are deleted in DLL
+            runModel(dboxes, minObjSize, odRcds[vchID], minObjs[vchID], frame, vchID, frameCnt, cfg.odScoreTh);
+
+            if (minObjSize > 0)
+                minObjCnt++;
+        }
 
         endOD = steady_clock::now();
 
@@ -123,7 +129,7 @@ int main() {
                 drawBoxes(cfg, odRcds[vchID], minObjs[vchID], frame, dboxes, vchID);
 
             if (cfg.fdChannels[vchID])
-                drawFD(cfg, fdRcds[vchID], frame, vchID, cfg.fdScoreTh);
+                drawFD(cfg, fdRcds[vchID], frame, vchID, cfg.fdScoreThFire, cfg.fdScoreThSmoke);
 
             if (cfg.ccChannels[vchID])
                 drawCC(cfg, ccRcds[vchID], density, frame, vchID);
@@ -136,8 +142,9 @@ int main() {
         int delayFD = duration_cast<milliseconds>(endFD - endOD).count();
         int delayCC = duration_cast<milliseconds>(endCC - endFD).count();
 
-        cout << std::format("[{}]Frame{:>4}>  Inference Delay: {:>2}ms (OD: {:>2}ms, FD: {:>2}ms, CC: {:>2}ms)\n",
-                            vchID, frameCnt, delay, delayOD, delayFD, delayCC);
+        cout << std::format(
+            "[{}]Frame{:>4}> Inference Delay: {:>2}ms (OD: {:>2}ms, FD: {:>2}ms, CC: {:>2}ms), Small Objects: {}\n",
+            vchID, frameCnt, delay, delayOD, delayFD, delayCC, minObjCnt);
 
         if (frameCnt > 10 && frameCnt < 100) {  // skip the start frames and limit the number of elements
             if (cfg.odChannels[vchID])
@@ -242,12 +249,6 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, MinObj &minObj, Mat &img, vector<De
         Scalar boxColor(50, 255, 255);
         vector<string> texts;
 
-        int partitionIdx = (dbox.y + dbox.h) / (img.rows / 4);  //(dbox.y + dbox.h): 0 ~ H-1
-        if (minObj.mode == MIN_OBJ_IN_DRAW) {
-            if ((minObj.ths[partitionIdx] > 0) && (dbox.h * dbox.w < minObj.ths[partitionIdx]))
-                boxColor = Scalar(230, 255, 20);  // ignored box;
-        }
-
         bool isFemale;
         int probFemale;
 
@@ -256,12 +257,18 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, MinObj &minObj, Mat &img, vector<De
             boxColor = isFemale ? Scalar(80, 80, 255) : Scalar(255, 80, 80);
         }
 
+        int partitionIdx = (dbox.y + dbox.h) / (img.rows / 4);  //(dbox.y + dbox.h): 0 ~ H-1
+        if (minObj.mode == MIN_OBJ_IN_DRAW) {
+            if ((minObj.ths[partitionIdx] > 0) && (dbox.h * dbox.w < minObj.ths[partitionIdx]))
+                boxColor = Scalar(230, 255, 20);  // ignored box;
+        }
+
         // boxColor = Scalar(0, 255, 0); //for hsw
 
         if (DRAW_DETECTION_INFO) {
             // string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
-            string objName =
-                std::format("{}({:.1f}):{}({})", objNames[label], dbox.prob * 100 + 0.5, dbox.w * dbox.h, partitionIdx);
+            string objName = std::format("{}{}({:.1f}):{}({})", dbox.trackID, objNames[label], dbox.prob * 100 + 0.5,
+                                         dbox.w * dbox.h, partitionIdx);
             // string objName = to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 +
             // 0.5)) + "%)";
             // string objName = to_string(dbox.trackID);
@@ -390,7 +397,7 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, MinObj &minObj, Mat &img, vector<De
     }
 }
 
-void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh) {
+void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreThFire, float fdScoreThSmoke) {
     time_t now = time(NULL);
     int h = img.rows;
     int w = img.cols;
@@ -409,7 +416,7 @@ void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh) 
                                     Point(sx + 21, sy + 33), Point(sx + 63, sy + 42), Point(sx + 54, sy + 60),
                                     Point(sx + 36, sy + 87), Point(sx + 36, sy + 65)};
 
-    if (fdRcd.fireProbs.back() > fdScoreTh) {
+    if (fdRcd.fireProbs.back() > fdScoreThFire) {
         if (DRAW_FIRE_DETECTION) {
             /// draw canvas
             Mat fdIconRegion = img(Rect(Point(fx - 4, fy - 2), Point(fx + 63 + 4, fy + 87 + 2)));
@@ -420,7 +427,7 @@ void drawFD(Config &cfg, FDRecord &fdRcd, Mat &img, int vchID, float fdScoreTh) 
         strFire = "O";
     }
 
-    if (fdRcd.smokeProbs.back() > fdScoreTh) {
+    if (fdRcd.smokeProbs.back() > fdScoreThSmoke) {
         if (DRAW_FIRE_DETECTION) {
             Mat smokeIconRegion = img(Rect(Point(sx - 4, sy - 2), Point(sx + 63 + 4, sy + 87 + 2)));
             smokeIconRegion -= Scalar(100, 100, 100);
