@@ -44,6 +44,9 @@
 #define OUT_WIDTH_CC 2048   /// net width for cc(out)
 #define OUT_HEIGHT_CC 1536  /// net height for cc(out)
 
+#define NET_WIDTH_SR 1920  /// net height for sr
+#define NET_HEIGHT_SR 128  /// net height for sr
+
 #define NUM_ATTRIBUTES 30  /// number of attributes(should be compatible with the PAR model)
 #define ATT_GENDER 0       /// gender should be the first att in a mapping list
 #define ATT_AGE_CHILD 1
@@ -99,6 +102,10 @@
 #define MIN_OBJ_NONE 0
 #define MIN_OBJ_IN_DLL 1
 #define MIN_OBJ_IN_DRAW 2
+
+/// SUPER_EYE_MODE
+#define SUPER_EYE_DISABLE 0
+#define SUPER_EYE_ENABLE 1
 
 typedef unsigned char uchar;
 typedef unsigned int uint;
@@ -352,6 +359,38 @@ struct PedAtts {
     }
 };
 
+struct MinObj {
+    int vchID;
+    int mode;    /// 0(default):none, 1: in dll, 2: in draw
+    int ths[4];  /// 4 partitions
+
+    void init(int _vchID = -1) {
+        vchID = _vchID;
+        mode = MIN_OBJ_NONE;
+        ths[0] = ths[1] = ths[2] = ths[3] = 0;
+    }
+};
+
+struct SuperEye {
+    int vchID;
+    int mode;
+    int topY;
+
+    void init(int _vchID = -1) {
+        vchID = _vchID;
+        mode = SUPER_EYE_DISABLE;
+        topY = 0;
+    }
+};
+
+struct CInfo {
+    ODRecord odRcd;
+    FDRecord fdRcd;
+    CCRecord ccRcd;
+    MinObj minObj;
+    SuperEye superEye;
+};
+
 /// data structure for object detection result
 struct DetBox {
     int x, y, w, h;   /// (x, y): top-left corner, (w, h): width & height of bounded box
@@ -372,18 +411,6 @@ struct DetBox {
     uchar justCountedZone;  /// for emphasizing the object just counted (15:lastest - 0:no action)
 
     PedAtts patts;  /// PAR info
-};
-
-struct MinObj {
-    int vchID;
-    int mode;    /// 0(default):none, 1: in dll, 2: in draw
-    int ths[4];  /// 4 partitions
-
-    void init(int _vchID = -1) {
-        vchID = _vchID;
-        mode = 0;
-        ths[0] = ths[1] = ths[2] = ths[3] = 0;
-    }
 };
 
 struct Config {
@@ -413,6 +440,13 @@ struct Config {
     int odBatchSize;  /// batch size of the od model
     std::vector<std::string> odIDMapping;
     int numClasses;  /// number of classes
+
+    // sr config
+    bool srEnable;            /// Enable super eye
+    std::string srModelFile;  /// path to the od model file (ex:aipro_od_1_1.trt)
+    int srNetWidth;           /// width of the od model input
+    int srNetHeight;          /// height of the od model input
+    int srScaleFactor;        /// only interger scale supported
 
     // channel selection
     std::vector<bool> odChannels;  /// flags for indicating object detection channels

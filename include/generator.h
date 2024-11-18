@@ -33,15 +33,11 @@
 #include <opencv2/core.hpp>
 
 // parsing
-GENERATOR_API bool parseConfigAPI(Config &cfg, std::vector<ODRecord> &odRcds, std::vector<FDRecord> &fdRcds,
-                                  std::vector<CCRecord> &ccRcds, std::vector<MinObj> &minObjs);
+GENERATOR_API bool parseConfigAPI(Config &cfg, std::vector<CInfo> &cInfos);
 
 /** @brief Initialize model
  *
  * @param cfg configuration struct
- * @param odRcd object detection record struct
- * @param fdRcd fire detection record struct
- * @param ccRcd crowd counter record struct
  * @return initialization result(true: success, false: fail)
  */
 GENERATOR_API bool initModel(Config &cfg);
@@ -50,18 +46,17 @@ GENERATOR_API bool initModel(Config &cfg);
  *
  * @param dboxes return detected dboxes of the vchID channel
  * @param minObjSize return the size of a detected small object
- * @param odRcd object detection record struct
- * @param minObj minimum size object deletion struct
+ * @param cInfo channel information
  * @param frame input frame
  * @param vchID vchID of the input frame
  * @param frameCnt frameCnt of the input frame
  * @param odScoreTh threshold for filtering low confident detections
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModel(std::vector<DetBox> &dboxes, int &minObjSize, ODRecord &odRcd, MinObj &minObj,
-                            cv::Mat &frame, int vchID, uint frameCnt, float odScoreTh);
+GENERATOR_API bool runModel(std::vector<DetBox> &dboxes, int &minObjSize, CInfo &cInfo, cv::Mat &frame, int vchID,
+                            uint frameCnt, float odScoreTh);
 
-/** @brief Run detection and PAR models for a frame batch
+/** @brief Run fire classification for a single frame
  *
  * @param fdRcd fire detection record struct
  * @param frame input frame

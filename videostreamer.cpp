@@ -5,10 +5,7 @@
 #include "opencv2/opencv.hpp"
 //#include "util.h"
 
-VideoStreamer::VideoStreamer(Config &cfg, vector<ODRecord> &odRcds, vector<CCRecord> &ccRcds) {
-    pOdRcds = &odRcds;
-    pCcRcds = &ccRcds;
-
+VideoStreamer::VideoStreamer(Config &cfg, std::vector<CInfo> &cInfo) {
     pCfg = &cfg;
     numChannels = cfg.numChannels;
 
@@ -18,7 +15,7 @@ VideoStreamer::VideoStreamer(Config &cfg, vector<ODRecord> &odRcds, vector<CCRec
     videoWriters.resize(numChannels);
     captures.resize(numChannels);
 
-    init();
+    init(cInfo);
 }
 
 VideoStreamer::~VideoStreamer() {
@@ -35,7 +32,7 @@ void VideoStreamer::destroy() {
     // std::cout << "destory VideoStreamer ends\n";
 }
 
-void VideoStreamer::init() {
+void VideoStreamer::init(std::vector<CInfo> &cInfo) {
     for (int vchID = 0; vchID < numChannels; vchID++) {
         std::string input = inputs[vchID];
 
@@ -63,7 +60,7 @@ void VideoStreamer::init() {
                 exit(-1);
             }
 
-            for (CntLine &c : (*pOdRcds)[vchID].cntLines) {
+            for (CntLine &c : cInfo[vchID].odRcd.cntLines) {
                 if (vchID == c.vchID) {
                     if (c.pts[0].x < 0 || c.pts[0].x >= frameWidth || c.pts[1].x < 0 || c.pts[1].x >= frameWidth) {
                         cout << std::format("[{}] cntLine pt.x error in keepConnected: {} {} {}", vchID, c.pts[0].x,
@@ -78,7 +75,7 @@ void VideoStreamer::init() {
                 }
             }
 
-            for (Zone &z : (*pOdRcds)[vchID].zones) {
+            for (Zone &z : cInfo[vchID].odRcd.zones) {
                 if (vchID == z.vchID) {
                     for (Point &pt : z.pts) {
                         if (pt.x < 0 || pt.x >= frameWidth) {
@@ -97,7 +94,7 @@ void VideoStreamer::init() {
             }
 
 #ifndef _CPU_INFER
-            for (CCZone &z : (*pCcRcds)[vchID].ccZones) {
+            for (CCZone &z : cInfo[vchID].ccRcd.ccZones) {
                 if (vchID == z.vchID) {
                     for (Point &pt : z.pts) {
                         if (pt.x < 0 || pt.x >= frameWidth) {
@@ -140,10 +137,8 @@ bool VideoStreamer::read(Mat &frame, int vchID) {
     cv::VideoCapture &capture = captures[vchID];
     capture.read(frame);
 
-    if (frame.empty()) {
-        cout << std::format(" [{}]Read Fail\n", vchID);
+    if (frame.empty())
         return false;
-    }
 
     return true;
 }

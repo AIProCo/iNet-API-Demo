@@ -48,18 +48,16 @@ void drawCC(Config &cfg, CCRecord &ccRcd, Mat &density, Mat &img, int vchID);
 // start engine
 int main() {
     Config cfg;
-    vector<ODRecord> odRcds;  // for each vchID
-    vector<FDRecord> fdRcds;  // for each vchID
-    vector<CCRecord> ccRcds;  // for each vchID
-    vector<MinObj> minObjs;   // for each vchID
+    vector<CInfo> cInfos;  // channel information for each vchID
 
     try {
-        if (!parseConfigAPI(cfg, odRcds, fdRcds, ccRcds, minObjs)) {  // parse config.json, cam.json, and is.txt
+        if (!parseConfigAPI(cfg, cInfos)) {  // parse config.json
             cout << "parseConfigAPI: Parsing Error!\n";
             return -1;
         }
     } catch (const std::exception &e) {
         cout << e.what() << endl;
+        return -1;
     }
 
     if (!initModel(cfg)) {
@@ -67,7 +65,7 @@ int main() {
         return -1;
     }
 
-    VideoStreamer streamer(cfg, odRcds, ccRcds);
+    VideoStreamer streamer(cfg, cInfos);
 
     vector<unsigned int> frameCnts;
     frameCnts.resize(cfg.numChannels, 0);
@@ -87,6 +85,7 @@ int main() {
         }
 
         unsigned int &frameCnt = frameCnts[vchID];
+        CInfo &cInfo = cInfos[vchID];
 
         start = steady_clock::now();
 
@@ -94,7 +93,7 @@ int main() {
         vector<DetBox> dboxes;
         if (cfg.odChannels[vchID]) {
             int minObjSize = 0;  // set only when minObjs are deleted in DLL
-            runModel(dboxes, minObjSize, odRcds[vchID], minObjs[vchID], frame, vchID, frameCnt, cfg.odScoreTh);
+            runModel(dboxes, minObjSize, cInfo, frame, vchID, frameCnt, cfg.odScoreTh);
 
             if (minObjSize > 0)
                 minObjCnt++;
@@ -104,7 +103,7 @@ int main() {
 
         // fire classification
         if (cfg.fdChannels[vchID]) {
-            runModelFD(fdRcds[vchID], frame, vchID);
+            runModelFD(cInfo.fdRcd, frame, vchID);
         }
 
         endFD = steady_clock::now();
@@ -113,11 +112,11 @@ int main() {
         Mat density;
         if (cfg.ccChannels[vchID]) {
 #ifndef _CPU_INFER
-            runModelCC(density, ccRcds[vchID], frame, vchID);
+            runModelCC(density, cInfo.ccRcd, frame, vchID);
 #else
-            if (ccRcds[vchID].ccZones.size() > 0) {
-                ccRcds[vchID].ccZones[0].setCanvas(frame);  // only one ccZone
-                runModelCC(density, ccRcds[vchID], frame, vchID);
+            if (cInfo.ccRcd.ccZones.size() > 0) {
+                cInfo.ccRcd.ccZones[0].setCanvas(frame);  // only one ccZone
+                runModelCC(density, cInfo.ccRcd, frame, vchID);
             }
 #endif
         }
@@ -126,13 +125,13 @@ int main() {
 
         if (cfg.recording) {
             if (cfg.odChannels[vchID])
-                drawBoxes(cfg, odRcds[vchID], minObjs[vchID], frame, dboxes, vchID);
+                drawBoxes(cfg, cInfo.odRcd, cInfo.minObj, frame, dboxes, vchID);
 
             if (cfg.fdChannels[vchID])
-                drawFD(cfg, fdRcds[vchID], frame, vchID, cfg.fdScoreThFire, cfg.fdScoreThSmoke);
+                drawFD(cfg, cInfo.fdRcd, frame, vchID, cfg.fdScoreThFire, cfg.fdScoreThSmoke);
 
             if (cfg.ccChannels[vchID])
-                drawCC(cfg, ccRcds[vchID], density, frame, vchID);
+                drawCC(cfg, cInfo.ccRcd, density, frame, vchID);
 
             streamer.write(frame, vchID);  // write a frame to the output video
         }
@@ -189,8 +188,8 @@ int main() {
             cout << std::format("  -{}\n", outFile);
     }
 
-    destroyModel();      // destroy all models
     streamer.destroy();  // destroy streamer
+    destroyModel();      // destroy all models
 
     cout << "\nTerminate program!\n";
 

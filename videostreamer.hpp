@@ -19,8 +19,6 @@ using namespace cv;
 class VideoStreamer {
    public:
     Config *pCfg;
-    vector<ODRecord> *pOdRcds;
-    vector<CCRecord> *pCcRcds;
 
     int numChannels;
     vector<string> inputs;
@@ -29,14 +27,14 @@ class VideoStreamer {
     vector<VideoWriter> videoWriters;
     vector<VideoCapture> captures;
 
-    VideoStreamer(Config &cfg, std::vector<ODRecord> &odRcds, std::vector<CCRecord> &ccRcds);
+    VideoStreamer(Config &cfg, std::vector<CInfo> &cInfo);
     ~VideoStreamer();
 
     void destroy();  // explicit destroy function. (cuz destructor is called randomly)
     bool read(Mat &frame, int vchID);
 
    private:
-    void init();
+    void init(std::vector<CInfo> &cInfo);
 
    public:
     VideoWriter &operator[](int idx) {
