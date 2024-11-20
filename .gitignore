@@ -1,6 +1,7 @@
 inputs/
 bin/
 videos/
+build/
 .vs/
 x64/
 .clang-format

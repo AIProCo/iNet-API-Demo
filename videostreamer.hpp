@@ -10,6 +10,10 @@
 #include <thread>
 #include <vector>
 
+#ifndef _WIN32
+#include <iterator>
+#endif
+
 #include "global.h"
 #include "util.h"
 
