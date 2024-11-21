@@ -5,7 +5,7 @@ updated: 2024-06-19T22:02
 # AIPro iNet Solution Guide for Ubuntu Nvidia GPU v1.1 (English)
 
 + **Document version**: v1.1
-+ **Date**: 2024-11-19
++ **Date**: 2024-11-21
 + **Author**: [HaHV](mailto:hoangvanhauit@gmail.com)
 
 ## General information
@@ -20,8 +20,8 @@ updated: 2024-06-19T22:02
 + Ubuntu 22.04 LTS
   + You can install Ubuntu using this [guide](https://www.youtube.com/watch?v=mXyN1aJYefc&ab_channel=Robtech)
   + You can install Nvidia driver using this [guide](https://www.youtube.com/watch?v=OFWKevbjDPU&ab_channel=Abstractprogrammer)
-+ Cuda 12.1.0
-+ cuDNN 8.9.6
++ Cuda 12.1.0 (need to install)
++ cuDNN 8.9.6 (need to install)
 + OpenCV-4.9.0 (included)
 + TensorRT-8.6.1.6 (included)
 + OpenVINO 2023.2 (included)
@@ -94,21 +94,26 @@ sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda-12.1/lib64/libcu
 
 ### Step 4: Download and extract necessary files
 
-+ Download and upzip one of the followings zip files. Each zip files has 3 directories after unzip: `bin`, `inputs`, and `videos`.<font color="#c00000"> Then, copy and paste `bin` directory to the solution directory (the directory including the .sln file). Move `inputs` and `videos` to the `bin` directory </font>.
+> **NOTE**: the `.net` models in `inputs` folder are used for linux environment, so **DO NOT USE* the `.net` models in `inputs` folder for Windows environment.
+
++ Download and upzip one of the followings zip files. Each zip files has 3 directories after unzip: `bin`, `inputs`, and `videos`.<font color="#c00000"> Then, copy and paste `bin`, `inputs`, and `videos` directories to the solution directory (the directory including the .sln file).</font>
   + Cuda compute capability of your GPU should be 8.6 (RTX-30xx) or 8.9 (RTX-40xx):
     + [RTX-30xx](https://drive.google.com/drive/folders/1vteFaTs42lWt_OP5GT0dhDPymNaoA2vw?usp=sharing)
     + [RTX-40xx](https://drive.google.com/drive/folders/1BOkc6lzTf81BbqlR0HYVk7jm6WGP9llJ?usp=drive_link)
 
-### Step 8: Build and run iNet framework on WSL
+### Step 8: Build and run iNet framework
 
 > **NOTE**: If you want to build for `CPU`, the flag in `CMakeLists.txt` must be turn ON
 > `set (BUILD_FOR_CPU ON)`
 
 + Check and modify  the contents of the `CMakeLists.txt` files if needed. Make sure configs correct, especially for *header file directories* and *lib file directories*.
 
-+ Run `build.sh [-force] [-debug]` to build/rebuild from scratch or enable debug mode.
+Two methods to build the project, and run the executable file:
+
++ Run `build.sh [-force] [-debug]` to build or rebuild from scratch [-force] and enable debug mode [-debug].
   + Note that the executable file (`client`) are automatically copied to `bin` folder after build process.
-+ Make sure `inputs` folder (with `config.json` and `.net` mode files) and `videos` folder are moved/copied into `bin` folder.
-  + Run `client`:
-    + `cd bin`
-    + `./client`
+    + <font color="#c00000"> Move `inputs` folder (with `config.json` and `.net` mode files) and `videos` folder are moved/copied into `bin` folder.</font>
+    + Run `client`:
+      + `cd bin`
+      + `./client`
++ Method 2: Simply run the script `run.sh -b` to build and run the executable file.
