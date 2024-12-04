@@ -115,9 +115,9 @@ struct Zone {
     int zoneID;    /// Unique zone id
     int vchID;     /// vchID where the zone exists
 
-    int isMode;    /// IS mode(0: people counting, 1: restricted area)
-    int preTotal;  /// for internal usage in external server
-    int state;     /// for internal usage in external server(0: no people, 1: transition, 2: people)
+    int isMode;   /// IS mode(0: people counting, 1: restricted area)
+    int alerted;  /// for internal usage in external server
+    int state;    /// for internal usage in external server(number of events)
 
     std::vector<cv::Point> pts;                  /// corner points (should be larger than 2)
     int curPeople[NUM_GENDERS][NUM_AGE_GROUPS];  /// current people in the zone
@@ -131,7 +131,8 @@ struct Zone {
             }
         }
 
-        preTotal = 0;
+        alerted = 0;
+        state = 0;
     }
 
     int getTotal() {
@@ -256,6 +257,12 @@ struct CCZone {
     std::deque<int> ccNums;
 
     void init() {
+        ccLevel = 0;
+        preCCLevel = 0;
+
+        maxCC = 0;
+        maxCCDay = 0;
+
         for (int i = 0; i < NUM_CC_LEVELS - 1; i++) {
             accCCLevels[i] = 0;
             accCCLevelsDay[i] = 0;
@@ -299,9 +306,7 @@ struct FDRecord {
     int vchID;
     std::deque<float> fireProbs;   // fire probability
     std::deque<float> smokeProbs;  // smoke probability
-    // int fireEvent;                 // fire event
-    // int smokeEvent;                // smoke event
-    int afterFireEvent;  // for internal usage in external server
+    int afterFireEvent;            // for internal usage in external server
 };
 
 struct CCRecord {
@@ -447,6 +452,7 @@ struct Config {
     int srNetWidth;           /// width of the od model input
     int srNetHeight;          /// height of the od model input
     int srScaleFactor;        /// only interger scale supported
+    float srDeltaScoreTh;     /// threshold for filtering low confident detections
 
     // channel selection
     std::vector<bool> odChannels;  /// flags for indicating object detection channels

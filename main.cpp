@@ -238,12 +238,12 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, MinObj &minObj, Mat &img, vector<De
         if (dbox.objID >= cfg.numClasses)
             continue;
 
-        Rect box(dbox.x, dbox.y, dbox.w, dbox.h);
-        boxes.push_back(box);
-
         int label = dbox.objID;
         if (dbox.prob < cfg.odScoreTh)
             continue;  // should check scores are ordered. Otherwise, use continue
+
+        Rect box(dbox.x, dbox.y, dbox.w, dbox.h);
+        boxes.push_back(box);
 
         Scalar boxColor(50, 255, 255);
         vector<string> texts;
