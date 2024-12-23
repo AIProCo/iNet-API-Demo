@@ -93,7 +93,6 @@ void VideoStreamer::init(std::vector<CInfo> &cInfo) {
                 }
             }
 
-#ifndef _CPU_INFER
             for (CCZone &z : cInfo[vchID].ccRcd.ccZones) {
                 if (vchID == z.vchID) {
                     for (Point &pt : z.pts) {
@@ -111,7 +110,7 @@ void VideoStreamer::init(std::vector<CInfo> &cInfo) {
                     }
                 }
             }
-#endif
+
             pCfg->odScaleFactors[vchID] =
                 std::min((float)pCfg->odNetWidth / frameWidth, (float)pCfg->odNetHeight / frameHeight);
             pCfg->odScaleFactorsInv[vchID] = 1.0f / pCfg->odScaleFactors[vchID];
