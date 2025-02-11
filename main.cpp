@@ -25,7 +25,7 @@
 // util
 #include "util.h"
 
-#define DRAW_DETECTION_INFO true
+#define DRAW_DETECTION_INFO false
 #define DRAW_FIRE_DETECTION true
 #define DRAW_FIRE_DETECTION_COUNTING true
 #define DRAW_CNTLINE true

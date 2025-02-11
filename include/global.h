@@ -23,17 +23,18 @@
 /// System
 #define PERSON 0  /// person should be the first object in a mapping list
 
-#define NUM_CLASSES_FD 2  /// number of fire detection classes(should be compatible with the FD model)
-#define SMOKE 0
-#define FIRE 1
-
 #ifndef _CPU_INFER
-#define NET_WIDTH_OD 1920   /// net width for od
-#define NET_HEIGHT_OD 1081  /// net height for od
+#define NET_WIDTH_OD 1920   /// net width for od and od-ir
+#define NET_HEIGHT_OD 1081  /// net height for od and od-ir
 #else
 #define NET_WIDTH_OD 960   /// net width for od
 #define NET_HEIGHT_OD 540  /// net height for od
 #endif
+
+/// OD_MODE
+#define OD_MODE_NONE 0  /// NONE should be 0
+#define OD_MODE_RGB 1
+#define OD_MODE_IR 2
 
 #define NET_WIDTH_FD 640   /// net width for fd
 #define NET_HEIGHT_FD 360  /// net height for fd
@@ -79,11 +80,10 @@
 #define ATT_BAG 28
 #define ATT_HAT 29
 
-#define NUM_FD_CLASSES 4
-#define FD_CLASS_BOTH 0
-#define FD_CLASS_FIRE 1
-#define FD_CLASS_NONE 2
-#define FD_CLASS_SMOKE 3
+#define NUM_FD_CLASSES 3  /// number of fire classes(should be compatible with the FD model)
+#define FD_CLASS_FIRE 0
+#define FD_CLASS_NONE 1
+#define FD_CLASS_SMOKE 2
 
 #define NUM_GENDERS 2
 #define MALE 0
@@ -436,7 +436,8 @@ struct Config {
 
     // od config
     bool odEnable;            /// Enable object detection and tracking
-    std::string odModelFile;  /// path to the od model file (ex:aipro_od_1_1.trt)
+    std::string odModelFile;  /// path to the rgb od model file (ex:aipro_od_1_1.trt)
+    std::string irModelFile;  /// path to the ir od model file (ex:aipro_ir_1_1.trt)
     int odNetWidth;           /// width of the od model input
     int odNetHeight;          /// height of the od model input
     std::vector<float> odScaleFactors;
@@ -455,9 +456,9 @@ struct Config {
     float srDeltaScoreTh;     /// threshold for filtering low confident detections
 
     // channel selection
-    std::vector<bool> odChannels;  /// flags for indicating object detection channels
-    std::vector<bool> fdChannels;  /// flags for indicating fire detection channels
-    std::vector<bool> ccChannels;  /// flags for indicating crowd counting channels
+    std::vector<int> odChannels;  /// flags for object detection channels (0: disable, 1: rgb, 2: ir)
+    std::vector<int> fdChannels;  /// flags for fire detection channels (0: disable, 1: enable)
+    std::vector<int> ccChannels;  /// flags for crowd counting channels (0: disable, 1: enable)
 
     // fd config
     bool fdEnable;            /// Enable fire detection and tracking
