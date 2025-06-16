@@ -265,9 +265,10 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, MinObj &minObj, Mat &img, vector<De
         // boxColor = Scalar(0, 255, 0); //for hsw
 
         if (DRAW_DETECTION_INFO) {
+            string objName = objNames[label];
             // string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
-            string objName = std::format("{}{}({:.1f}):{}({})", dbox.trackID, objNames[label], dbox.prob * 100 + 0.5,
-                                         dbox.w * dbox.h, partitionIdx);
+            // string objName = std::format("{}{}({:.1f}):{}({})", dbox.trackID, objNames[label], dbox.prob * 100 + 0.5,
+            // dbox.w * dbox.h, partitionIdx);
             // string objName = to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 +
             // 0.5)) + "%)";
             // string objName = to_string(dbox.trackID);
@@ -280,7 +281,7 @@ void drawBoxes(Config &cfg, ODRecord &odRcd, MinObj &minObj, Mat &img, vector<De
             texts.push_back(objName);
             // vector<string> texts{objName, timeInfo};
 
-            if (0 && label == PERSON) {
+            if (0 && label == OD_ID_PERSON) {
                 string trkInfo;
                 int period = now - dbox.inTime;
                 if (period < cfg.longLastingObjTh) {  // no action

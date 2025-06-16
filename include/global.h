@@ -21,7 +21,7 @@
 #define CFG_FILEPATH INPUT_DIRECTORY "config.json"
 
 /// System
-#define PERSON 0  /// person should be the first object in a mapping list
+#define OD_ID_PERSON 0  /// person should be the first object in a mapping list
 
 #ifndef _CPU_INFER
 #define NET_WIDTH_OD 1920   /// net width for od and od-ir
