@@ -21,19 +21,20 @@
 #define CFG_FILEPATH INPUT_DIRECTORY "config.json"
 
 /// System
-#define PERSON 0  /// person should be the first object in a mapping list
-
-#define NUM_CLASSES_FD 2  /// number of fire detection classes(should be compatible with the FD model)
-#define SMOKE 0
-#define FIRE 1
+#define OD_ID_PERSON 0  /// person should be the first object in a mapping list
 
 #ifndef _CPU_INFER
-#define NET_WIDTH_OD 1920   /// net width for od
-#define NET_HEIGHT_OD 1081  /// net height for od
+#define NET_WIDTH_OD 1920   /// net width for od and od-ir
+#define NET_HEIGHT_OD 1081  /// net height for od and od-ir
 #else
 #define NET_WIDTH_OD 960   /// net width for od
 #define NET_HEIGHT_OD 540  /// net height for od
 #endif
+
+/// OD_MODE
+#define OD_MODE_NONE 0     /// NONE should be 0
+#define OD_MODE_RGB 1
+#define OD_MODE_IR 2
 
 #define NET_WIDTH_FD 640   /// net width for fd
 #define NET_HEIGHT_FD 360  /// net height for fd
@@ -79,11 +80,10 @@
 #define ATT_BAG 28
 #define ATT_HAT 29
 
-#define NUM_FD_CLASSES 4
-#define FD_CLASS_BOTH 0
-#define FD_CLASS_FIRE 1
-#define FD_CLASS_NONE 2
-#define FD_CLASS_SMOKE 3
+#define NUM_FD_CLASSES 3 /// number of fire classes(should be compatible with the FD model)
+#define FD_CLASS_FIRE 0
+#define FD_CLASS_NONE 1
+#define FD_CLASS_SMOKE 2
 
 #define NUM_GENDERS 2
 #define MALE 0
@@ -116,8 +116,8 @@ struct Zone {
     int vchID;     /// vchID where the zone exists
 
     int isMode;    /// IS mode(0: people counting, 1: restricted area)
-    int preTotal;  /// for internal usage in external server
-    int state;     /// for internal usage in external server(0: no people, 1: transition, 2: people)
+    int alerted;   /// for internal usage in external server
+    int state;     /// for internal usage in external server(number of events)
 
     std::vector<cv::Point> pts;                  /// corner points (should be larger than 2)
     int curPeople[NUM_GENDERS][NUM_AGE_GROUPS];  /// current people in the zone
@@ -131,7 +131,8 @@ struct Zone {
             }
         }
 
-        preTotal = 0;
+        alerted = 0;
+        state = 0;
     }
 
     int getTotal() {
@@ -194,7 +195,7 @@ struct CCZone {
     cv::Size roiScaledSize;
     double sH, sW;
 
-    void setCanvas(cv::Mat &frame) {
+    void setCanvas(cv::Mat& frame) {
         if (canvas.empty())
             initCanvas(frame);
 
@@ -209,7 +210,7 @@ struct CCZone {
         roiCanvas = roiScaled.mul(mask);
     }
 
-    void initCanvas(cv::Mat &frame) {
+    void initCanvas(cv::Mat& frame) {
         sH = (float)NET_HEIGHT_CC / frame.rows;
         sW = (float)NET_WIDTH_CC / frame.cols;
 
@@ -218,7 +219,7 @@ struct CCZone {
         roiTL = cv::Point(INT_MAX, INT_MAX);
         roiBR = cv::Point(0, 0);
 
-        for (auto &pt : pts) {
+        for (auto& pt : pts) {
             if (pt.x < roiTL.x)
                 roiTL.x = pt.x;
 
@@ -233,7 +234,7 @@ struct CCZone {
         }
 
         std::vector<cv::Point> movedPts;
-        for (auto &pt : pts) {
+        for (auto& pt : pts) {
             cv::Point movedPt;
             movedPt.x = (pt.x - roiTL.x) * sW;
             movedPt.y = (pt.y - roiTL.y) * sH;
@@ -256,6 +257,12 @@ struct CCZone {
     std::deque<int> ccNums;
 
     void init() {
+        ccLevel = 0;
+        preCCLevel = 0;
+
+        maxCC = 0;
+        maxCCDay = 0;
+
         for (int i = 0; i < NUM_CC_LEVELS - 1; i++) {
             accCCLevels[i] = 0;
             accCCLevelsDay[i] = 0;
@@ -297,11 +304,13 @@ struct ODRecord {
 
 struct FDRecord {
     int vchID;
-    std::deque<float> fireProbs;   // fire probability
-    std::deque<float> smokeProbs;  // smoke probability
-    // int fireEvent;                 // fire event
-    // int smokeEvent;                // smoke event
-    int afterFireEvent;  // for internal usage in external server
+    std::deque<float> fireProbs;    // fire probability
+    std::deque<float> smokeProbs;   // smoke probability
+    int afterFireEvent;             // for internal usage in external server
+
+#ifndef _CPU_INFER
+    std::vector<cv::Point> pts;     /// corner points (should be larger than 2)
+#endif
 };
 
 struct CCRecord {
@@ -315,26 +324,28 @@ struct PedAtts {
     int setCnt;                  /// frame count after the last PAR inference
     float atts[NUM_ATTRIBUTES];  /// Attributes to be extracted
 
-    static bool getGenderAtt(PedAtts &patts) {
+    static bool getGenderAtt(PedAtts& patts) {
         return (patts.atts[ATT_GENDER] > 0.5);
     }
 
-    static void getGenderAtt(PedAtts &patts, bool &isFemale, int &prob) {
+    static void getGenderAtt(PedAtts& patts, bool& isFemale, int& prob) {
         isFemale = patts.atts[ATT_GENDER] > 0.5;
         prob =
             isFemale ? (int)(patts.atts[ATT_GENDER] * 100 + 0.5f) : (int)((1.0f - patts.atts[ATT_GENDER]) * 100 + 0.5f);
     }
 
-    static int getAgeGroupAtt(PedAtts &patts) {
+    static int getAgeGroupAtt(PedAtts& patts) {
         int ageGroup;
 
         if (patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ADULT] &&
             patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ELDER]) {
             ageGroup = CHILD_GROUP;
-        } else {
+        }
+        else {
             if (patts.atts[ATT_AGE_ADULT] > patts.atts[ATT_AGE_ELDER]) {
                 ageGroup = ADULT_GROUP;
-            } else {
+            }
+            else {
                 ageGroup = ELDER_GROUP;
             }
         }
@@ -342,16 +353,18 @@ struct PedAtts {
         return ageGroup;
     }
 
-    static void getAgeGroupAtt(PedAtts &patts, int &ageGroup, int &prob) {
+    static void getAgeGroupAtt(PedAtts& patts, int& ageGroup, int& prob) {
         if (patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ADULT] &&
             patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ELDER]) {
             ageGroup = CHILD_GROUP;
             prob = patts.atts[ATT_AGE_CHILD] * 100 + 0.5f;
-        } else {
+        }
+        else {
             if (patts.atts[ATT_AGE_ADULT] > patts.atts[ATT_AGE_ELDER]) {
                 ageGroup = ADULT_GROUP;
                 prob = patts.atts[ATT_AGE_ADULT] * 100 + 0.5f;
-            } else {
+            }
+            else {
                 ageGroup = ELDER_GROUP;
                 prob = patts.atts[ATT_AGE_ELDER] * 100 + 0.5f;
             }
@@ -419,7 +432,6 @@ struct Config {
     std::vector<std::string> inputFiles;   /// list of the input files
     std::vector<std::string> outputFiles;  /// list of the output files
     bool recording;                        /// record output videos
-    bool debugMode;                        /// output debug info and frames
     bool boostMode;                        /// enable boost mode(minimize delay)
     bool igpuEnable;                       /// use igpu if present
 
@@ -431,7 +443,8 @@ struct Config {
 
     // od config
     bool odEnable;            /// Enable object detection and tracking
-    std::string odModelFile;  /// path to the od model file (ex:aipro_od_1_1.trt)
+    std::string odModelFile;  /// path to the rgb od model file (ex:aipro_od_1_1.trt)
+    std::string irModelFile;  /// path to the ir od model file (ex:aipro_ir_1_1.trt)
     int odNetWidth;           /// width of the od model input
     int odNetHeight;          /// height of the od model input
     std::vector<float> odScaleFactors;
@@ -447,11 +460,12 @@ struct Config {
     int srNetWidth;           /// width of the od model input
     int srNetHeight;          /// height of the od model input
     int srScaleFactor;        /// only interger scale supported
+    float srDeltaScoreTh;  /// threshold for filtering low confident detections
 
     // channel selection
-    std::vector<bool> odChannels;  /// flags for indicating object detection channels
-    std::vector<bool> fdChannels;  /// flags for indicating fire detection channels
-    std::vector<bool> ccChannels;  /// flags for indicating crowd counting channels
+    std::vector<int> odChannels;  /// flags for object detection channels (0: disable, 1: rgb, 2: ir)
+    std::vector<int> fdChannels;  /// flags for fire detection channels (0: disable, 1: enable)
+    std::vector<int> ccChannels;  /// flags for crowd counting channels (0: disable, 1: enable)
 
     // fd config
     bool fdEnable;            /// Enable fire detection and tracking
@@ -465,7 +479,10 @@ struct Config {
     int fdWindowSize;      /// window size for fire and smoke detection history
     int fdNumClasses;      /// number of classes
     int fdPeriod;          /// fire detection period
-
+#ifndef _CPU_INFER
+    bool fdTemporalStabilization;   /// appropriate to fixed cameras like CCTV
+    bool fdDrawBlockDebug;   /// draw block debug info
+#endif
     // tracking
     int longLastingObjTh;  /// threshold for checking long-lasting objects in second
     float noMoveTh;        /// threshold for checking no movement objects

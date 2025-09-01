@@ -33,14 +33,14 @@
 #include <opencv2/core.hpp>
 
 // parsing
-GENERATOR_API bool parseConfigAPI(Config &cfg, std::vector<CInfo> &cInfos);
+GENERATOR_API bool parseConfigAPI(Config& cfg, std::vector<CInfo>& cInfos);
 
 /** @brief Initialize model
  *
  * @param cfg configuration struct
  * @return initialization result(true: success, false: fail)
  */
-GENERATOR_API bool initModel(Config &cfg);
+GENERATOR_API bool initModel(Config& cfg);
 
 /** @brief Run detection and PAR models for a single frame
  *
@@ -53,8 +53,8 @@ GENERATOR_API bool initModel(Config &cfg);
  * @param odScoreTh threshold for filtering low confident detections
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModel(std::vector<DetBox> &dboxes, int &minObjSize, CInfo &cInfo, cv::Mat &frame, int vchID,
-                            uint frameCnt, float odScoreTh);
+GENERATOR_API bool runModel(std::vector<DetBox>& dboxes, int& minObjSize, CInfo& cInfo, cv::Mat& frame, int vchID,
+    uint frameCnt, float odScoreTh);
 
 /** @brief Run fire classification for a single frame
  *
@@ -62,7 +62,7 @@ GENERATOR_API bool runModel(std::vector<DetBox> &dboxes, int &minObjSize, CInfo 
  * @param frame input frame
  * @param vchID vchID of the input frame
  */
-GENERATOR_API bool runModelFD(FDRecord &fdRcd, cv::Mat &frame, int vchID);
+GENERATOR_API bool runModelFD(FDRecord& fdRcd, cv::Mat& frame, int vchID);
 
 /** @brief Run crowd counter for a single frame
  *
@@ -71,7 +71,7 @@ GENERATOR_API bool runModelFD(FDRecord &fdRcd, cv::Mat &frame, int vchID);
  * @param vchID vchID of the input frame
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModelCC(cv::Mat &density, CCRecord &ccRcd, cv::Mat &frame, int vchID);
+GENERATOR_API bool runModelCC(cv::Mat& density, CCRecord& ccRcd, cv::Mat& frame, int vchID);
 
 /** @brief Destroy all models
  *
