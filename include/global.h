@@ -32,7 +32,11 @@
 #endif
 
 /// OD_MODE
+<<<<<<< HEAD
 #define OD_MODE_NONE 0     /// NONE should be 0
+=======
+#define OD_MODE_NONE 0  /// NONE should be 0
+>>>>>>> origin/main
 #define OD_MODE_RGB 1
 #define OD_MODE_IR 2
 
@@ -80,7 +84,11 @@
 #define ATT_BAG 28
 #define ATT_HAT 29
 
+<<<<<<< HEAD
 #define NUM_FD_CLASSES 3 /// number of fire classes(should be compatible with the FD model)
+=======
+#define NUM_FD_CLASSES 3  /// number of fire classes(should be compatible with the FD model)
+>>>>>>> origin/main
 #define FD_CLASS_FIRE 0
 #define FD_CLASS_NONE 1
 #define FD_CLASS_SMOKE 2
@@ -115,9 +123,15 @@ struct Zone {
     int zoneID;    /// Unique zone id
     int vchID;     /// vchID where the zone exists
 
+<<<<<<< HEAD
     int isMode;    /// IS mode(0: people counting, 1: restricted area)
     int alerted;   /// for internal usage in external server
     int state;     /// for internal usage in external server(number of events)
+=======
+    int isMode;   /// IS mode(0: people counting, 1: restricted area)
+    int alerted;  /// for internal usage in external server
+    int state;    /// for internal usage in external server(number of events)
+>>>>>>> origin/main
 
     std::vector<cv::Point> pts;                  /// corner points (should be larger than 2)
     int curPeople[NUM_GENDERS][NUM_AGE_GROUPS];  /// current people in the zone
@@ -304,6 +318,7 @@ struct ODRecord {
 
 struct FDRecord {
     int vchID;
+<<<<<<< HEAD
     std::deque<float> fireProbs;    // fire probability
     std::deque<float> smokeProbs;   // smoke probability
     int afterFireEvent;             // for internal usage in external server
@@ -311,6 +326,11 @@ struct FDRecord {
 #ifndef _CPU_INFER
     std::vector<cv::Point> pts;     /// corner points (should be larger than 2)
 #endif
+=======
+    std::deque<float> fireProbs;   // fire probability
+    std::deque<float> smokeProbs;  // smoke probability
+    int afterFireEvent;            // for internal usage in external server
+>>>>>>> origin/main
 };
 
 struct CCRecord {
@@ -460,7 +480,11 @@ struct Config {
     int srNetWidth;           /// width of the od model input
     int srNetHeight;          /// height of the od model input
     int srScaleFactor;        /// only interger scale supported
+<<<<<<< HEAD
     float srDeltaScoreTh;  /// threshold for filtering low confident detections
+=======
+    float srDeltaScoreTh;     /// threshold for filtering low confident detections
+>>>>>>> origin/main
 
     // channel selection
     std::vector<int> odChannels;  /// flags for object detection channels (0: disable, 1: rgb, 2: ir)

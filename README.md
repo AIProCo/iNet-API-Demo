@@ -2,8 +2,7 @@
 
 - This is a repository for demo of iNet-API developped by AIPro Inc.
   + iNet: AIPro Deep Learning Solution supporting the following functionalities:
-     - Object Detection 
-     - Object Tracking
+     - Object Detection and Tracking (RGB and Thermal)
      - Pedestrian Attribute Recognition
      - Pedestrian Counting & Zone Hitmap Estimation
      - Fire Classification
@@ -26,13 +25,13 @@
 ### **Installation and Solution Guide**
 
 - You can refer to one of the following technical documents in the repository for installation and guide:
-  + Korean: AIPro_iNet_solution_guide_v1.4.x(Korean).pdf
+  + Korean: AIPro_iNet_solution_guide_v1.6(Korean).pdf
 
 ### **Download and extract files**
 - Download and upzip one of the followings zip files. Then, copy and paste bin, inputs, and videos directories to the solution directory (the directory including the `.sln` file):
   + Cuda compute capability of your GPU should be 8.6(RTX-30xx) or 8.9(RTX-40xx): 
-    - RTX-30xx: https://drive.google.com/file/d/1oCVWXsYJZ_lNw1qSWvu5iLK5TiQBIL93/view?usp=sharing
-    - RTX-40xx: https://drive.google.com/file/d/1fzwT_evMnIKX7CTLSnp-MwfKLho5m_rt/view?usp=sharing
+    - RTX-30xx: https://drive.google.com/file/d/1O3lgADYVtQ2ph3Zb9DdOc86aF_YKGNjP/view?usp=sharing
+    - RTX-40xx: https://drive.google.com/file/d/1lF3AR1knPm2Km2bDrOsvcfnqRxvWa47a/view?usp=sharing
     
 ### **Run the project**
 

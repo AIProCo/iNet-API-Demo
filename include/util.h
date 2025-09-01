@@ -11,6 +11,11 @@
 #include <filesystem>
 #include <unordered_map>
 
+// for linux
+#ifndef _WIN32
+#include <iterator>
+#endif
+
 // for sleep
 #include <thread>
 #include <chrono>
@@ -249,7 +254,7 @@ class Vis {
 
         for (int i = 0; i < windowSize; i++) {
             firePts.push_back(Point(insideRect.x + i * deltaX, insideRect.y + (1.0f - fireProbs[i]) * deltaY));
-            smokePts.push_back(Point(insideRect.x + i * deltaX, insideRect.y + (1.0f - smokeProbs[i]) * deltaY));
+            smokePts.push_back(Point(insideRect.x + i * deltaX, insideRect.y + (1.0f - smokeProbs[i]) * deltaY - 2));
         }
 
         polylines(matImg, firePts, false, Scalar(0, 0, 255), 2);

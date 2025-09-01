@@ -62,7 +62,8 @@ gcc-13 --version
 + Install dependent libs: note that tbb (Intel oneAPI Threading Building Blocks) may not be installed by default, so you need to install it manually.
 
 ```shell
-sudo apt install cmake libtbb2 g++ wget unzip ffmpeg libgtk2.0-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libtbb-dev libjpeg-dev libpng-dev libtiff-dev
+# sudo apt install cmake libtbb2 g++ wget unzip ffmpeg libgtk2.0-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libtbb-dev libjpeg-dev libpng-dev libtiff-dev
+sudo apt install cmake libtbb2 g++ wget unzip ffmpeg libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libtbb-dev libjpeg-dev libpng-dev libtiff-dev
 ```
 
 ### Step 2: Install Cuda 12.1 for Ubuntu 22.04
@@ -96,7 +97,7 @@ sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda-12.1/lib64/libcu
 
 + Download and upzip one of the followings zip files. Each zip files has 3 directories after unzip: `bin`, `inputs`, and `videos`.<font color="#c00000"> Then, copy and paste `bin` directory to the solution directory (the directory including the .sln file). Move `inputs` and `videos` to the `bin` directory </font>.
   + Cuda compute capability of your GPU should be 8.6 (RTX-30xx) or 8.9 (RTX-40xx):
-    + [RTX-30xx](https://drive.google.com/drive/folders/1vteFaTs42lWt_OP5GT0dhDPymNaoA2vw?usp=sharing)
+    + [RTX-30xx](https://drive.google.com/file/d/1TwgibCdUaguFutAWyyhhQnwrqF2ZwrsI/view?usp=drive_link)
     + [RTX-40xx](https://drive.google.com/drive/folders/1BOkc6lzTf81BbqlR0HYVk7jm6WGP9llJ?usp=drive_link)
 
 ### Step 8: Build and run iNet framework on WSL
