@@ -61,8 +61,9 @@ GENERATOR_API bool runModel(std::vector<DetBox>& dboxes, int& minObjSize, CInfo&
  * @param fdRcd fire detection record struct
  * @param frame input frame
  * @param vchID vchID of the input frame
+ * @param cropRatio1Dx100 crop ratio for fire classification
  */
-GENERATOR_API bool runModelFD(FDRecord& fdRcd, cv::Mat& frame, int vchID);
+GENERATOR_API bool runModelFD(FDRecord& fdRcd, cv::Mat& frame, int vchID, int cropRatio1Dx100);
 
 /** @brief Run crowd counter for a single frame
  *

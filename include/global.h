@@ -309,7 +309,7 @@ struct FDRecord {
     int afterFireEvent;             // for internal usage in external server
 
 #ifndef _CPU_INFER
-    std::vector<cv::Point> pts;     /// corner points (should be larger than 2)
+    std::vector<cv::Point> pts;     /// corner points (should be larger than 3)
 #endif
 };
 
@@ -478,8 +478,10 @@ struct Config {
     int fdBatchSize;       /// batch size of the fd model
     int fdWindowSize;      /// window size for fire and smoke detection history
     int fdNumClasses;      /// number of classes
-    int fdPeriod;          /// fire detection period
-#ifndef _CPU_INFER
+    int fdPeriod;          /// fire detection period    
+    int fdCropRatio1Dx100;	   /// 1D crop ratio x 100 for fire detection (to remove irrelevant regions)
+
+#ifndef _CPU_INFER    
     bool fdTemporalStabilization;   /// appropriate to fixed cameras like CCTV
     bool fdDrawBlockDebug;   /// draw block debug info
 #endif
