@@ -88,6 +88,11 @@ int main() {
         unsigned int& frameCnt = frameCnts[vchID];
         CInfo& cInfo = cInfos[vchID];
 
+        //if (frameCnt < 12000) {
+        //    frameCnt++;
+        //    continue;
+        //}
+
         start = steady_clock::now();
 
         // object detection and tracking
@@ -104,7 +109,8 @@ int main() {
 
         // fire classification
         if (cfg.fdChannels[vchID]) {
-            runModelFD(cInfo.fdRcd, frame, vchID, cfg.fdCropRatio1Dx100);
+            int detectedClassID = -1; // 0: FD_CLASS_FIRE, 1: FD_CLASS_NONE, 2: FD_CLASS_SMOKE 
+            runModelFD(cInfo.fdRcd, frame, vchID, detectedClassID);
         }
 
         endFD = steady_clock::now();
