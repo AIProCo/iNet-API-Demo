@@ -55,14 +55,13 @@ int main() {
             cout << "parseConfigAPI: Parsing Error!\n";
             return -1;
         }
+        if (!initModel(cfg)) {
+            cout << "initModel: Initialization of the solution failed!\n";
+            return -1;
+        }
     }
     catch (const std::exception& e) {
         cout << e.what() << endl;
-        return -1;
-    }
-
-    if (!initModel(cfg)) {
-        cout << "initModel: Initialization of the solution failed!\n";
         return -1;
     }
 
@@ -88,11 +87,6 @@ int main() {
         unsigned int& frameCnt = frameCnts[vchID];
         CInfo& cInfo = cInfos[vchID];
 
-        //if (frameCnt < 12000) {
-        //    frameCnt++;
-        //    continue;
-        //}
-
         start = steady_clock::now();
 
         // object detection and tracking
@@ -106,10 +100,11 @@ int main() {
         }
 
         endOD = steady_clock::now();
+        int detectedClassID = -1;
 
         // fire classification
         if (cfg.fdChannels[vchID]) {
-            int detectedClassID = -1; // 0: FD_CLASS_FIRE, 1: FD_CLASS_NONE, 2: FD_CLASS_SMOKE 
+            //int detectedClassID = -1; // 0: FD_CLASS_FIRE, 1: FD_CLASS_NONE, 2: FD_CLASS_SMOKE 
             runModelFD(cInfo.fdRcd, frame, vchID, detectedClassID);
         }
 

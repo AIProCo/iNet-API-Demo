@@ -473,8 +473,9 @@ struct Config {
     int fdNetWidth;           /// width of the fd model input
     int fdNetHeight;          /// height of the fd model input
     std::vector<float> fdScaleFactors;
-    float fdScoreThFire;   /// threshold for filtering low confident detections
-    float fdScoreThSmoke;  /// threshold for filtering low confident detections
+    float fdScoreThFire;   /// threshold for filtering low confident detections (Fire)
+    float fdScoreThSmoke;  /// threshold for filtering low confident detections (Smoke)
+    float fdReliableTh;    /// threshold for reliable detection (None)
     int fdBatchSize;       /// batch size of the fd model
     int fdWindowSize;      /// window size for fire and smoke detection history
     int fdNumClasses;      /// number of classes
