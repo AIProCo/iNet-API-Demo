@@ -25,7 +25,7 @@
 
 #ifndef _CPU_INFER
 #define NET_WIDTH_OD 1920   /// net width for od and od-ir
-#define NET_HEIGHT_OD 1081  /// net height for od and od-ir
+#define NET_HEIGHT_OD 1080  /// net height for od and od-ir
 #else
 #define NET_WIDTH_OD 960   /// net width for od
 #define NET_HEIGHT_OD 540  /// net height for od
@@ -48,37 +48,13 @@
 #define NET_WIDTH_SR 1920  /// net height for sr
 #define NET_HEIGHT_SR 128  /// net height for sr
 
-#define NUM_ATTRIBUTES 30  /// number of attributes(should be compatible with the PAR model)
-#define ATT_GENDER 0       /// gender should be the first att in a mapping list
-#define ATT_AGE_CHILD 1
-#define ATT_AGE_ADULT 2
-#define ATT_AGE_ELDER 3
-#define ATT_HAIR_LEN_SHORT 4
-#define ATT_HAIR_LEN_LONG 5
-#define ATT_UBODY_LEN_SHORT 6
-#define ATT_UBODY_COL_BLACK 7
-#define ATT_UBODY_COL_BLUE 8
-#define ATT_UBODY_COL_BROWN 9
-#define ATT_UBODY_COL_GREEN 10
-#define ATT_UBODY_COL_GRAY 11
-#define ATT_UBODY_COL_PINK 12
-#define ATT_UBODY_COL_PURPLE 13
-#define ATT_UBODY_COL_RED 14
-#define ATT_UBODY_COL_WHITE 15
-#define ATT_UBODY_COL_YELLOW 16
-#define ATT_UBODY_COL_OTHER 17
-#define ATT_LBODY_LEN_SHORT 18
-#define ATT_LBODY_COL_BLACK 19
-#define ATT_LBODY_COL_BLUE 20
-#define ATT_LBODY_COL_BROWN 21
-#define ATT_LBODY_COL_GRAY 22
-#define ATT_LBODY_COL_WHITE 23
-#define ATT_LBODY_COL_OTHER 24
-#define ATT_LBODY_TYPE_TROUSER_SHORT 25
-#define ATT_LBODY_TYPE_SKIRT_DRESS 26
-#define ATT_BACKPACK 27
-#define ATT_BAG 28
-#define ATT_HAT 29
+#define NUM_ATTRIBUTES 6  /// number of attributes(should be compatible with the PAR model)
+#define ATT_FEMALE_ADULT 0       
+#define ATT_FEMALE_CHILD 1
+#define ATT_FEMALE_OLD 2
+#define ATT_MALE_ADULT 3       
+#define ATT_MALE_CHILD 4
+#define ATT_MALE_OLD 5
 
 #define NUM_FD_CLASSES 3 /// number of fire classes(should be compatible with the FD model)
 #define FD_CLASS_FIRE 0
@@ -93,6 +69,8 @@
 #define CHILD_GROUP 0
 #define ADULT_GROUP 1
 #define ELDER_GROUP 2
+
+#define NUM_PAR_CLASSES 6
 
 /// IS_MODE
 #define IS_PEOPLE_COUNTING 0
@@ -325,48 +303,61 @@ struct PedAtts {
     float atts[NUM_ATTRIBUTES];  /// Attributes to be extracted
 
     static bool getGenderAtt(PedAtts& patts) {
-        return (patts.atts[ATT_GENDER] > 0.5);
+        float probFemale = patts.atts[ATT_FEMALE_ADULT] + patts.atts[ATT_FEMALE_CHILD] + patts.atts[ATT_FEMALE_OLD];
+        float probMale = patts.atts[ATT_MALE_ADULT] + patts.atts[ATT_MALE_CHILD] + patts.atts[ATT_MALE_OLD];
+        return (probFemale > probMale);
     }
 
     static void getGenderAtt(PedAtts& patts, bool& isFemale, int& prob) {
-        isFemale = patts.atts[ATT_GENDER] > 0.5;
-        prob =
-            isFemale ? (int)(patts.atts[ATT_GENDER] * 100 + 0.5f) : (int)((1.0f - patts.atts[ATT_GENDER]) * 100 + 0.5f);
+        float probFemale = patts.atts[ATT_FEMALE_ADULT] + patts.atts[ATT_FEMALE_CHILD] + patts.atts[ATT_FEMALE_OLD];
+        float probMale = patts.atts[ATT_MALE_ADULT] + patts.atts[ATT_MALE_CHILD] + patts.atts[ATT_MALE_OLD];
+
+        if (probFemale >= probMale) {
+            isFemale = true;
+            prob = (int)(probFemale * 100 + 0.5f);
+        }
+        else {
+            isFemale = false;
+            prob = (int)(probMale * 100 + 0.5f);
+        }
     }
 
     static int getAgeGroupAtt(PedAtts& patts) {
         int ageGroup;
+        float probAdult = patts.atts[ATT_FEMALE_ADULT] + patts.atts[ATT_MALE_ADULT];
+        float probChild = patts.atts[ATT_FEMALE_CHILD] + patts.atts[ATT_MALE_CHILD];
+        float probOld = patts.atts[ATT_FEMALE_OLD] + patts.atts[ATT_MALE_OLD];
 
-        if (patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ADULT] &&
-            patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ELDER]) {
-            ageGroup = CHILD_GROUP;
+        if (probAdult >= probChild && probAdult >= probOld) {
+            ageGroup = ADULT_GROUP;
         }
         else {
-            if (patts.atts[ATT_AGE_ADULT] > patts.atts[ATT_AGE_ELDER]) {
-                ageGroup = ADULT_GROUP;
-            }
-            else {
+            if (probChild > probOld)
+                ageGroup = CHILD_GROUP;
+            else
                 ageGroup = ELDER_GROUP;
-            }
         }
 
         return ageGroup;
     }
 
     static void getAgeGroupAtt(PedAtts& patts, int& ageGroup, int& prob) {
-        if (patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ADULT] &&
-            patts.atts[ATT_AGE_CHILD] > patts.atts[ATT_AGE_ELDER]) {
-            ageGroup = CHILD_GROUP;
-            prob = patts.atts[ATT_AGE_CHILD] * 100 + 0.5f;
+        float probAdult = patts.atts[ATT_FEMALE_ADULT] + patts.atts[ATT_MALE_ADULT];
+        float probChild = patts.atts[ATT_FEMALE_CHILD] + patts.atts[ATT_MALE_CHILD];
+        float probOld = patts.atts[ATT_FEMALE_OLD] + patts.atts[ATT_MALE_OLD];
+
+        if (probAdult >= probChild && probAdult >= probOld) {
+            ageGroup = ADULT_GROUP;
+            prob = probAdult * 100 + 0.5f;
         }
         else {
-            if (patts.atts[ATT_AGE_ADULT] > patts.atts[ATT_AGE_ELDER]) {
-                ageGroup = ADULT_GROUP;
-                prob = patts.atts[ATT_AGE_ADULT] * 100 + 0.5f;
+            if (probChild > probOld) {
+                ageGroup = CHILD_GROUP;
+                prob = probChild * 100 + 0.5f;
             }
             else {
                 ageGroup = ELDER_GROUP;
-                prob = patts.atts[ATT_AGE_ELDER] * 100 + 0.5f;
+                prob = probOld * 100 + 0.5f;
             }
         }
     }

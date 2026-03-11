@@ -25,15 +25,14 @@
 // util
 #include "util.h"
 
-#define DRAW_DETECTION_INFO false
-#define DRAW_FIRE_DETECTION true
-#define DRAW_FIRE_DETECTION_COUNTING true
+#define DRAW_DETECTION_BOXES true
+#define DRAW_DETECTION_INFO true
 #define DRAW_CNTLINE true
 #define DRAW_CNTLINE_COUNTING false
 #define DRAW_ZONE true
 #define DRAW_ZONE_COUNTING false
+#define DRAW_FIRE_DETECTION true
 #define DRAW_CC true
-#define DRAW_CC_COUNTING true
 
 using namespace std;
 using namespace cv;
@@ -71,13 +70,14 @@ int main() {
     frameCnts.resize(cfg.numChannels, 0);
     unsigned int frameLimit = cfg.frameLimit;  // number of frames to be processed
 
-    steady_clock::time_point start, endOD, endFD, endCC;
+    steady_clock::time_point startAll, endAll, startOD, endOD, startFD, endFD, startCC, endCC;
     vector<int> delayODs, delayFDs, delayCCs;
 
     int vchID = 0;
     int minObjCnt = 0;
     while (1) {
         Mat frame;
+        int delayOD = 0, delayFD = 0, delayCC = 0;
 
         if (!streamer.read(frame, vchID)) {
             cout << "End of Videos!\n";
@@ -87,32 +87,39 @@ int main() {
         unsigned int& frameCnt = frameCnts[vchID];
         CInfo& cInfo = cInfos[vchID];
 
-        start = steady_clock::now();
+        startAll = steady_clock::now();
 
         // object detection and tracking
         vector<DetBox> dboxes;
         if (cfg.odChannels[vchID]) {
             int minObjSize = 0;  // set only when minObjs are deleted in DLL
+
+            startOD = steady_clock::now();
             runModel(dboxes, minObjSize, cInfo, frame, vchID, frameCnt, cfg.odScoreTh);
+            endOD = steady_clock::now();
+
+            delayOD = duration_cast<milliseconds>(endOD - startOD).count();
 
             if (minObjSize > 0)
                 minObjCnt++;
         }
 
-        endOD = steady_clock::now();
-        int detectedClassID = -1;
+
+        int detectedClassID = -1; // 0: FD_CLASS_FIRE, 1: FD_CLASS_NONE, 2: FD_CLASS_SMOKE 
 
         // fire classification
         if (cfg.fdChannels[vchID]) {
-            //int detectedClassID = -1; // 0: FD_CLASS_FIRE, 1: FD_CLASS_NONE, 2: FD_CLASS_SMOKE 
+            startFD = steady_clock::now();
             runModelFD(cInfo.fdRcd, frame, vchID, detectedClassID);
-        }
+            endFD = steady_clock::now();
 
-        endFD = steady_clock::now();
+            delayFD = duration_cast<milliseconds>(endFD - startFD).count();
+        }
 
         // crowd counting
         Mat density;
         if (cfg.ccChannels[vchID]) {
+            startCC = steady_clock::now();
 #ifndef _CPU_INFER
             runModelCC(density, cInfo.ccRcd, frame, vchID);
 #else
@@ -121,32 +128,30 @@ int main() {
                 runModelCC(density, cInfo.ccRcd, frame, vchID);
             }
 #endif
+            endCC = steady_clock::now();
+            delayCC = duration_cast<milliseconds>(endCC - startCC).count();
         }
 
-        endCC = steady_clock::now();
+        endAll = steady_clock::now();
 
         if (cfg.recording) {
-            if (cfg.odChannels[vchID])
+            if (cfg.odChannels[vchID] && DRAW_DETECTION_BOXES)
                 drawBoxes(cfg, cInfo.odRcd, cInfo.minObj, frame, dboxes, vchID);
 
-            if (cfg.fdChannels[vchID])
+            if (cfg.fdChannels[vchID] && DRAW_FIRE_DETECTION)
                 drawFD(cfg, cInfo.fdRcd, frame, vchID, cfg.fdScoreThFire, cfg.fdScoreThSmoke);
 
-            if (cfg.ccChannels[vchID])
+            if (cfg.ccChannels[vchID] && DRAW_CC)
                 drawCC(cfg, cInfo.ccRcd, density, frame, vchID);
 
             streamer.write(frame, vchID);  // write a frame to the output video
         }
 
-        int delay = duration_cast<milliseconds>(endCC - start).count();
-        int delayOD = duration_cast<milliseconds>(endOD - start).count();
-        int delayFD = duration_cast<milliseconds>(endFD - endOD).count();
-        int delayCC = duration_cast<milliseconds>(endCC - endFD).count();
+        int delayAll = duration_cast<milliseconds>(endAll - startAll).count();
 
         cout << std::format(
             "[{}]Frame{:>4}> Infer Delay: {:>2}ms (OD: {:>2}ms, FD: {:>2}ms, CC: {:>2}ms), Small Objs: {}\n",
-            vchID, frameCnt, delay, delayOD, delayFD, delayCC, minObjCnt);
-
+            vchID, frameCnt, delayAll, delayOD, delayFD, delayCC, minObjCnt);
         if (frameCnt > 10 && frameCnt < 100) {  // skip the start frames and limit the number of elements
             if (cfg.odChannels[vchID])
                 delayODs.push_back(delayOD);
@@ -227,6 +232,7 @@ void drawZones(Config& cfg, ODRecord& odRcd, Mat& img, int vchID, double alpha) 
     }
 }
 
+
 void drawBoxes(Config& cfg, ODRecord& odRcd, MinObj& minObj, Mat& img, vector<DetBox>& dboxes, int vchID,
     double alpha) {
     const string* objNames = cfg.odIDMapping.data();
@@ -236,6 +242,7 @@ void drawBoxes(Config& cfg, ODRecord& odRcd, MinObj& minObj, Mat& img, vector<De
     vector<Scalar> boxesColor;
     vector<bool> emphasizes;
     vector<vector<string>> boxTexts;
+    int boxCnt = 0;
 
     for (auto& dbox : dboxes) {
         if (dbox.objID >= cfg.numClasses)
@@ -245,6 +252,7 @@ void drawBoxes(Config& cfg, ODRecord& odRcd, MinObj& minObj, Mat& img, vector<De
         if (dbox.prob < cfg.odScoreTh)
             continue;  // should check scores are ordered. Otherwise, use continue
 
+        boxCnt++;
         Rect box(dbox.x, dbox.y, dbox.w, dbox.h);
         boxes.push_back(box);
 
@@ -283,19 +291,19 @@ void drawBoxes(Config& cfg, ODRecord& odRcd, MinObj& minObj, Mat& img, vector<De
             texts.push_back(objName);
             // vector<string> texts{objName, timeInfo};
 
-            if (0 && label == OD_ID_PERSON) {
-                string trkInfo;
-                int period = now - dbox.inTime;
-                if (period < cfg.longLastingObjTh) {  // no action
-                    trkInfo = "ET: " + to_string(period) + " (" + to_string((int)dbox.distVar) + ")";
-                }
-                else {                              // action (Sleep or Hang around)
-                    if (dbox.distVar < cfg.noMoveTh)  // Sleep event
-                        trkInfo = "ET: " + to_string(period) + ", No movement(" + to_string((int)dbox.distVar) + ")";
-                    else  // Hang around event
-                        trkInfo = "ET: " + to_string(period) + ", Hang around(" + to_string((int)dbox.distVar) + ")";
-                }
-                texts.push_back(trkInfo);
+            if (label == OD_ID_PERSON) {
+                //string trkInfo;
+                //int period = now - dbox.inTime;
+                //if (period < cfg.longLastingObjTh) {  // no action
+                //    trkInfo = "ET: " + to_string(period) + " (" + to_string((int)dbox.distVar) + ")";
+                //}
+                //else {                              // action (Sleep or Hang around)
+                //    if (dbox.distVar < cfg.noMoveTh)  // Sleep event
+                //        trkInfo = "ET: " + to_string(period) + ", No movement(" + to_string((int)dbox.distVar) + ")";
+                //    else  // Hang around event
+                //        trkInfo = "ET: " + to_string(period) + ", Hang around(" + to_string((int)dbox.distVar) + ")";
+                //}
+                //texts.push_back(trkInfo);
 
                 if (cfg.parEnable && dbox.patts.setCnt != -1) {
                     string genderInfo, ageGroupInfo;
@@ -325,6 +333,9 @@ void drawBoxes(Config& cfg, ODRecord& odRcd, MinObj& minObj, Mat& img, vector<De
     }
 
     Vis::drawBoxes(img, boxes, boxesColor, boxTexts, emphasizes);
+
+    //vector<string> boxCountText = { to_string(boxCnt) };
+    //Vis::drawTextBlock(img, Point(900, 100), boxCountText, 2, 2, Scalar(0, 0, 0), Scalar(0, 255, 0));
 
     if (DRAW_ZONE)
         drawZones(cfg, odRcd, img, vchID, alpha);
@@ -420,67 +431,59 @@ void drawFD(Config& cfg, FDRecord& fdRcd, Mat& img, int vchID, float fdScoreThFi
                                     Point(sx + 36, sy + 87), Point(sx + 36, sy + 65) };
 
     if (fdRcd.fireProbs.back() > fdScoreThFire) {
-        if (DRAW_FIRE_DETECTION) {
-            /// draw canvas
-            Mat fdIconRegion = img(Rect(Point(fx - 4, fy - 2), Point(fx + 63 + 4, fy + 87 + 2)));
-            fdIconRegion -= Scalar(100, 100, 100);
-            fillPoly(img, ptsFire, Scalar(0, 0, 255));
-        }
+        /// draw canvas
+        Mat fdIconRegion = img(Rect(Point(fx - 4, fy - 2), Point(fx + 63 + 4, fy + 87 + 2)));
+        fdIconRegion -= Scalar(100, 100, 100);
+        fillPoly(img, ptsFire, Scalar(0, 0, 255));
 
         strFire = "O";
     }
 
     if (fdRcd.smokeProbs.back() > fdScoreThSmoke) {
-        if (DRAW_FIRE_DETECTION) {
-            Mat smokeIconRegion = img(Rect(Point(sx - 4, sy - 2), Point(sx + 63 + 4, sy + 87 + 2)));
-            smokeIconRegion -= Scalar(100, 100, 100);
-            fillPoly(img, ptsSmoke, Scalar(200, 200, 200));
-        }
+        Mat smokeIconRegion = img(Rect(Point(sx - 4, sy - 2), Point(sx + 63 + 4, sy + 87 + 2)));
+        smokeIconRegion -= Scalar(100, 100, 100);
+        fillPoly(img, ptsSmoke, Scalar(200, 200, 200));
 
         strSmoke = "O";
     }
 
-    if (DRAW_FIRE_DETECTION_COUNTING) {
-        string fdText = "Event> Fire: " + strFire + ", Smoke: " + strSmoke;
-        Vis::drawTextBlockFD(img, fdRcd, vchID, 140, fdText, 1, 2);
+    string fdText = "Event> Fire: " + strFire + ", Smoke: " + strSmoke;
+    Vis::drawTextBlockFD(img, fdRcd, vchID, 140, fdText, 1, 2);
 
-        // if (cfg.boostMode && (strSmoke == "O" || strFire == "O"))
-        //    rectangle(img, Rect(0, 0, img.cols, img.rows), Scalar(0, 0, 255), 4);
-    }
+    // if (cfg.boostMode && (strSmoke == "O" || strFire == "O"))
+    //    rectangle(img, Rect(0, 0, img.cols, img.rows), Scalar(0, 0, 255), 4);    
 }
 
 void drawCC(Config& cfg, CCRecord& ccRcd, Mat& density, Mat& img, int vchID) {
-    if (DRAW_CC) {
-        if (cfg.boostMode) {
-            if (!density.empty()) {
-                vector<Mat> chans(3);
+    if (cfg.boostMode) {
+        if (!density.empty()) {
+            vector<Mat> chans(3);
 
-                split(img, chans);
-                chans[2] += density;  // add to red channel
-                merge(chans, img);
-            }
-
-            float alpha = 0.7f;
-            int np[1] = { 4 };
-            cv::Mat layer;
-
-            for (CCZone& ccZone : ccRcd.ccZones) {
-                if (layer.empty())
-                    layer = img.clone();
-
-                int z = ccZone.ccZoneID;
-                const Scalar color(50, 50, 255);
-                fillPoly(layer, { ccZone.pts }, color);
-            }
-
-            if (!layer.empty())
-                cv::addWeighted(img, alpha, layer, 1 - alpha, 0, img);
+            split(img, chans);
+            chans[2] += density;  // add to red channel
+            merge(chans, img);
         }
-        else {
-            for (CCZone& ccZone : ccRcd.ccZones) {
-                const Scalar color(20, 20, 255);
-                polylines(img, { ccZone.pts }, true, color, 2);
-            }
+
+        float alpha = 0.7f;
+        int np[1] = { 4 };
+        cv::Mat layer;
+
+        for (CCZone& ccZone : ccRcd.ccZones) {
+            if (layer.empty())
+                layer = img.clone();
+
+            int z = ccZone.ccZoneID;
+            const Scalar color(50, 50, 255);
+            fillPoly(layer, { ccZone.pts }, color);
+        }
+
+        if (!layer.empty())
+            cv::addWeighted(img, alpha, layer, 1 - alpha, 0, img);
+    }
+    else {
+        for (CCZone& ccZone : ccRcd.ccZones) {
+            const Scalar color(20, 20, 255);
+            polylines(img, { ccZone.pts }, true, color, 2);
         }
     }
 
@@ -489,25 +492,27 @@ void drawCC(Config& cfg, CCRecord& ccRcd, Mat& density, Mat& img, int vchID) {
 
     ////////////////////
     // draw couniting results
-    if (DRAW_CC_COUNTING) {
-        vector<string> ccTexts;
-        ccTexts.push_back(string("Crowd Counting for Each CZone"));
+
+    vector<string> ccTexts;
+    ccTexts.push_back(string("Crowd Counting for Each CZone"));
 
 #ifndef _CPU_INFER
-        ccTexts.push_back(std::format("  Entire Area:{:>5}", ccRcd.ccNumFrames.back()));
+    ccTexts.push_back(std::format("  Entire Area:{:>5}", ccRcd.ccNumFrames.back()));
 #endif
 
-        for (CCZone& ccZone : ccRcd.ccZones) {
-            string text =
-                // std::format(" -CZone {}: {:>4}", ccZone.ccZoneID+1, ccZone.ccNums.back());
-                std::format("  CZone {}:{:>7}(L{})", ccZone.ccZoneID, ccZone.ccNums.back(), ccZone.ccLevel);
-            ccTexts.push_back(text);
-        }
-
-        Vis::drawTextBlock(img, Point(img.cols - 555, 500), ccTexts, 1, 2);
-
-        // for demo
-        // vector<string> tmp0 = {string("CZone 1")};
-        // Vis::drawTextBlock2(img, Point(800, 200), tmp0, 1, 2);
+    for (CCZone& ccZone : ccRcd.ccZones) {
+        string text =
+            // std::format(" -CZone {}: {:>4}", ccZone.ccZoneID+1, ccZone.ccNums.back());
+            std::format("  CZone {}:{:>7}(L{})", ccZone.ccZoneID, ccZone.ccNums.back(), ccZone.ccLevel);
+        ccTexts.push_back(text);
     }
+
+    Vis::drawTextBlock(img, Point(img.cols - 555, 100), ccTexts, 1, 2);
+
+    // for demo
+    //vector<string> tmp0 = {string("CZone 0")};
+    //Vis::drawTextBlock(img, Point(640, 250), tmp0, 1, 2);
+
+    //vector<string> tmp1 = { string("CZone 1") };
+    //Vis::drawTextBlock(img, Point(640, 600), tmp1, 1, 2);    
 }
