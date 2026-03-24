@@ -49,6 +49,13 @@ int main() {
     Config cfg;
     vector<CInfo> cInfos;  // channel information for each vchID
 
+    //print dll info
+    string device;
+    int dllVersionX10, numInfLimit;
+    bool testMode;
+    getDLLInfo(device, dllVersionX10, testMode, numInfLimit);
+    cout << device << " DLLv" << dllVersionX10 << ": " << (testMode ? "test, " : "release, ") << numInfLimit << endl;
+
     try {
         if (!parseConfigAPI(cfg, cInfos)) {  // parse config.json
             cout << "parseConfigAPI: Parsing Error!\n";
@@ -98,7 +105,7 @@ int main() {
             runModel(dboxes, minObjSize, cInfo, frame, vchID, frameCnt, cfg.odScoreTh);
             endOD = steady_clock::now();
 
-            delayOD = duration_cast<milliseconds>(endOD - startOD).count();
+            delayOD = duration_cast<microseconds>(endOD - startOD).count();
 
             if (minObjSize > 0)
                 minObjCnt++;
@@ -113,7 +120,7 @@ int main() {
             runModelFD(cInfo.fdRcd, frame, vchID, detectedClassID);
             endFD = steady_clock::now();
 
-            delayFD = duration_cast<milliseconds>(endFD - startFD).count();
+            delayFD = duration_cast<microseconds>(endFD - startFD).count();
         }
 
         // crowd counting
@@ -129,7 +136,7 @@ int main() {
             }
 #endif
             endCC = steady_clock::now();
-            delayCC = duration_cast<milliseconds>(endCC - startCC).count();
+            delayCC = duration_cast<microseconds>(endCC - startCC).count();
         }
 
         endAll = steady_clock::now();
@@ -147,11 +154,11 @@ int main() {
             streamer.write(frame, vchID);  // write a frame to the output video
         }
 
-        int delayAll = duration_cast<milliseconds>(endAll - startAll).count();
+        int delayAll = duration_cast<microseconds>(endAll - startAll).count();
 
         cout << std::format(
-            "[{}]Frame{:>4}> Infer Delay: {:>2}ms (OD: {:>2}ms, FD: {:>2}ms, CC: {:>2}ms), Small Objs: {}\n",
-            vchID, frameCnt, delayAll, delayOD, delayFD, delayCC, minObjCnt);
+            "[{}]Frame{:>4}> Infer Delay(ms): {:>4.1f} (OD: {:>4.1f}, FD: {:>3.1f}, CC: {:>4.1f}), Small Objs: {}\n",
+            vchID, frameCnt, delayAll / 1000.0f, delayOD / 1000.0f, delayFD / 1000.0f, delayCC / 1000.0f, minObjCnt);
         if (frameCnt > 10 && frameCnt < 100) {  // skip the start frames and limit the number of elements
             if (cfg.odChannels[vchID])
                 delayODs.push_back(delayOD);
@@ -185,8 +192,8 @@ int main() {
             avgDelayCC = accumulate(delayCCs.begin(), delayCCs.end(), 0) / delayCCs.size();
 
         float avgDelay = avgDelayOD + avgDelayFD + avgDelayCC;
-        cout << std::format("\nAverage Delay: {:>2}ms (OD: {:>2}ms, FD: {:>2}ms, CC: {:>2}ms)\n", avgDelay, avgDelayOD,
-            avgDelayFD, avgDelayCC);
+        cout << std::format("\nAverage Delay(ms): {:>.1f} (OD: {:>.1f}, FD: {:>.1f}, CC: {:>.1f})\n", avgDelay / 1000.0f, avgDelayOD / 1000.0f,
+            avgDelayFD / 1000.0f, avgDelayCC / 1000.0f);
     }
 
     if (cfg.recording) {

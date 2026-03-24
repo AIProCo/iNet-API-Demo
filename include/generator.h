@@ -32,6 +32,9 @@
 #include <iostream>
 #include <opencv2/core.hpp>
 
+//get dll info
+GENERATOR_API bool getDLLInfo(std::string& _device, int& _versionX10, bool& _testMode, int& _numInfLimit);
+
 // parsing
 GENERATOR_API bool parseConfigAPI(Config& cfg, std::vector<CInfo>& cInfos);
 
