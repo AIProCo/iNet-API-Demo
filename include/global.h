@@ -446,8 +446,7 @@ struct Config {
     int numClasses;  /// number of classes
     bool odEboxCheckEnable;  /// enable ebox check
     bool odEboxFilterEnable; /// enable ebox filter (only for people detection)
-    int odEboxQueueSize;
-
+    
     // sr config
     bool srEnable;            /// Enable super eye
     std::string srModelFile;  /// path to the od model file (ex:aipro_od_1_1.trt)
