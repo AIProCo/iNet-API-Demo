@@ -444,6 +444,9 @@ struct Config {
     int odBatchSize;  /// batch size of the od model
     std::vector<std::string> odIDMapping;
     int numClasses;  /// number of classes
+    bool odEboxCheckEnable;  /// enable ebox check
+    bool odEboxFilterEnable; /// enable ebox filter (only for people detection)
+    int odEboxQueueSize;
 
     // sr config
     bool srEnable;            /// Enable super eye
