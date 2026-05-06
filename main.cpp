@@ -39,10 +39,14 @@ using namespace cv;
 using namespace std::chrono;
 
 void drawZones(Config& cfg, ODRecord& odRcd, Mat& img, int vchID, double alpha);
-void drawBoxes(Config& cfg, ODRecord& odRcd, MinObj& minObj, Mat& img, vector<DetBox>& dboxes, int vchID,
+void drawBoxes(Config& cfg, ODRecord& odRcd, Mat& img, vector<DetBox>& dboxes, int vchID,
     double alpha = 0.7);
 void drawFD(Config& cfg, FDRecord& fdRcd, Mat& img, int vchID, float fdScoreThFire, float fdScoreThSmoke);
 void drawCC(Config& cfg, CCRecord& ccRcd, Mat& density, Mat& img, int vchID);
+
+// same config file for both windows and linux
+const char* cfgFilename = "config.json";
+//const char* cfgFilename = "config-hsw.json";
 
 // start engine
 int main() {
@@ -57,7 +61,7 @@ int main() {
     cout << device << " DLLv" << dllVersionX10 << ": " << (testMode ? "test, " : "release, ") << numInfLimit << endl;
 
     try {
-        if (!parseConfigAPI(cfg, cInfos)) {  // parse config.json
+        if (!parseConfigAPI(cfg, cInfos, cfgFilename)) {  // parse config.json
             cout << "parseConfigAPI: Parsing Error!\n";
             return -1;
         }
@@ -81,7 +85,6 @@ int main() {
     vector<int> delayODs, delayFDs, delayCCs;
 
     int vchID = 0;
-    int minObjCnt = 0;
     while (1) {
         Mat frame;
         int delayOD = 0, delayFD = 0, delayCC = 0;
@@ -98,23 +101,17 @@ int main() {
 
         // object detection and tracking
         vector<DetBox> dboxes;
+        int filteredObjsCnt = 0;  // set only when minObjs are deleted in DLL
         if (cfg.odChannels[vchID]) {
-            int minObjSize = 0;  // set only when minObjs are deleted in DLL
-
             startOD = steady_clock::now();
-            runModel(dboxes, minObjSize, cInfo, frame, vchID, frameCnt, cfg.odScoreTh);
+            runModel(dboxes, filteredObjsCnt, cInfo, frame, vchID, frameCnt, cfg.odScoreTh);
             endOD = steady_clock::now();
 
             delayOD = duration_cast<microseconds>(endOD - startOD).count();
-
-            if (minObjSize > 0)
-                minObjCnt++;
         }
 
-
-        int detectedClassID = -1; // 0: FD_CLASS_FIRE, 1: FD_CLASS_NONE, 2: FD_CLASS_SMOKE 
-
         // fire classification
+        int detectedClassID = -1; // 0: FD_CLASS_FIRE, 1: FD_CLASS_NONE, 2: FD_CLASS_SMOKE 
         if (cfg.fdChannels[vchID]) {
             startFD = steady_clock::now();
             runModelFD(cInfo.fdRcd, frame, vchID, detectedClassID);
@@ -143,7 +140,7 @@ int main() {
 
         if (cfg.recording) {
             if (cfg.odChannels[vchID] && DRAW_DETECTION_BOXES)
-                drawBoxes(cfg, cInfo.odRcd, cInfo.minObj, frame, dboxes, vchID);
+                drawBoxes(cfg, cInfo.odRcd, frame, dboxes, vchID);
 
             if (cfg.fdChannels[vchID] && DRAW_FIRE_DETECTION)
                 drawFD(cfg, cInfo.fdRcd, frame, vchID, cfg.fdScoreThFire, cfg.fdScoreThSmoke);
@@ -156,9 +153,11 @@ int main() {
 
         int delayAll = duration_cast<microseconds>(endAll - startAll).count();
 
+        //if (filteredObjsCnt > 0)
         cout << std::format(
-            "[{}]Frame{:>4}> Infer Delay(ms): {:>4.1f} (OD: {:>4.1f}, FD: {:>3.1f}, CC: {:>4.1f}), Small Objs: {}\n",
-            vchID, frameCnt, delayAll / 1000.0f, delayOD / 1000.0f, delayFD / 1000.0f, delayCC / 1000.0f, minObjCnt);
+            "[{}]Frame{:>4}> Infer Delay(ms): {:>4.1f} (OD: {:>4.1f}, FD: {:>3.1f}, CC: {:>4.1f}), Filtered Objs: {}\n",
+            vchID, frameCnt, delayAll / 1000.0f, delayOD / 1000.0f, delayFD / 1000.0f, delayCC / 1000.0f, filteredObjsCnt);
+
         if (frameCnt > 10 && frameCnt < 100) {  // skip the start frames and limit the number of elements
             if (cfg.odChannels[vchID])
                 delayODs.push_back(delayOD);
@@ -240,7 +239,7 @@ void drawZones(Config& cfg, ODRecord& odRcd, Mat& img, int vchID, double alpha) 
 }
 
 
-void drawBoxes(Config& cfg, ODRecord& odRcd, MinObj& minObj, Mat& img, vector<DetBox>& dboxes, int vchID,
+void drawBoxes(Config& cfg, ODRecord& odRcd, Mat& img, vector<DetBox>& dboxes, int vchID,
     double alpha) {
     const string* objNames = cfg.odIDMapping.data();
     time_t now = time(NULL);
@@ -275,17 +274,13 @@ void drawBoxes(Config& cfg, ODRecord& odRcd, MinObj& minObj, Mat& img, vector<De
         }
 
         int partitionIdx = (dbox.y + dbox.h) / (img.rows / 4);  //(dbox.y + dbox.h): 0 ~ H-1
-        if (minObj.mode == MIN_OBJ_IN_DRAW) {
-            if ((minObj.ths[partitionIdx] > 0) && (dbox.h * dbox.w < minObj.ths[partitionIdx]))
-                boxColor = Scalar(230, 255, 20);  // ignored box;
-        }
-
         // boxColor = Scalar(0, 255, 0); //for hsw
 
         if (DRAW_DETECTION_INFO) {
-            string objName = objNames[label];
+            //string objName = objNames[label];
             //string objName = objNames[label] + "(" + to_string((int)(dbox.prob * 100 + 0.5)) + "%)";
-            //string objName = std::format("{}{}({:.1f}):{}({})", dbox.trackID, objNames[label], dbox.prob * 100 + 0.5,                dbox.w * dbox.h, partitionIdx);
+            string objName = std::format("{}{}({:.1f}):{}({})", dbox.trackID, objNames[label], dbox.prob * 100 + 0.5, dbox.w * dbox.h, partitionIdx);
+            //string objName = std::format("{}({:.1f}):{}({})", objNames[label], dbox.prob * 100 + 0.5, dbox.w * dbox.h, partitionIdx);
             // string objName = to_string(dbox.trackID) + objNames[label] + "(" + to_string((int)(dbox.prob * 100 +
             // 0.5)) + "%)";
             // string objName = to_string(dbox.trackID);

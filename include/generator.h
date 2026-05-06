@@ -36,7 +36,7 @@
 GENERATOR_API bool getDLLInfo(std::string& _device, int& _versionX10, bool& _testMode, int& _numInfLimit);
 
 // parsing
-GENERATOR_API bool parseConfigAPI(Config& cfg, std::vector<CInfo>& cInfos);
+GENERATOR_API bool parseConfigAPI(Config& cfg, std::vector<CInfo>& cInfos, const char* cfgFilename);
 
 /** @brief Initialize model
  *
@@ -48,7 +48,7 @@ GENERATOR_API bool initModel(Config& cfg);
 /** @brief Run detection and PAR models for a single frame
  *
  * @param dboxes return detected dboxes of the vchID channel
- * @param minObjSize return the size of a detected small object
+ * @param filteredObjCnt return the number of filtered objects
  * @param cInfo channel information
  * @param frame input frame
  * @param vchID vchID of the input frame
@@ -56,7 +56,7 @@ GENERATOR_API bool initModel(Config& cfg);
  * @param odScoreTh threshold for filtering low confident detections
  * @return flag for the running result(true: success, false: fail)
  */
-GENERATOR_API bool runModel(std::vector<DetBox>& dboxes, int& minObjSize, CInfo& cInfo, cv::Mat& frame, int vchID,
+GENERATOR_API bool runModel(std::vector<DetBox>& dboxes, int& filteredObjCnt, CInfo& cInfo, cv::Mat& frame, int vchID,
     uint frameCnt, float odScoreTh);
 
 /** @brief Run fire classification for a single frame

@@ -5,7 +5,7 @@
 #include "opencv2/opencv.hpp"
 //#include "util.h"
 
-VideoStreamer::VideoStreamer(Config &cfg, std::vector<CInfo> &cInfo) {
+VideoStreamer::VideoStreamer(Config& cfg, std::vector<CInfo>& cInfo) {
     pCfg = &cfg;
     numChannels = cfg.numChannels;
 
@@ -22,17 +22,17 @@ VideoStreamer::~VideoStreamer() {
 }
 
 void VideoStreamer::destroy() {
-    for (auto &capture : captures)
+    for (auto& capture : captures)
         capture.release();
 
     if (pCfg->recording) {
-        for (auto &videoWriter : videoWriters)
+        for (auto& videoWriter : videoWriters)
             videoWriter.release();
     }
     // std::cout << "destory VideoStreamer ends\n";
 }
 
-void VideoStreamer::init(std::vector<CInfo> &cInfo) {
+void VideoStreamer::init(std::vector<CInfo>& cInfo) {
     for (int vchID = 0; vchID < numChannels; vchID++) {
         std::string input = inputs[vchID];
 
@@ -41,7 +41,7 @@ void VideoStreamer::init(std::vector<CInfo> &cInfo) {
             return;
         }
 
-        cv::VideoCapture &capture = captures[vchID];
+        cv::VideoCapture& capture = captures[vchID];
         capture.open(input);  // opencv capture 객체 생성
 
         if (capture.isOpened()) {  //연결 완료
@@ -60,80 +60,88 @@ void VideoStreamer::init(std::vector<CInfo> &cInfo) {
                 exit(-1);
             }
 
-            for (CntLine &c : cInfo[vchID].odRcd.cntLines) {
+            for (CntLine& c : cInfo[vchID].odRcd.cntLines) {
                 if (vchID == c.vchID) {
                     if (c.pts[0].x < 0 || c.pts[0].x >= frameWidth || c.pts[1].x < 0 || c.pts[1].x >= frameWidth) {
                         cout << std::format("[{}] cntLine pt.x error in keepConnected: {} {} {}", vchID, c.pts[0].x,
-                                            c.pts[1].x, frameWidth);
+                            c.pts[1].x, frameWidth);
                         exit(-1);
                     }
                     if (c.pts[0].y < 0 || c.pts[0].y >= frameHeight || c.pts[1].y < 0 || c.pts[1].y >= frameHeight) {
                         cout << std::format("[{}] cntLine pt.y error in keepConnected: {} {} {}", vchID, c.pts[0].y,
-                                            c.pts[1].y, frameHeight);
+                            c.pts[1].y, frameHeight);
                         exit(-1);
                     }
                 }
             }
 
-            for (Zone &z : cInfo[vchID].odRcd.zones) {
+            for (Zone& z : cInfo[vchID].odRcd.zones) {
                 if (vchID == z.vchID) {
-                    for (Point &pt : z.pts) {
+                    for (Point& pt : z.pts) {
                         if (pt.x < 0 || pt.x >= frameWidth) {
                             cout << std::format("[{}] zone pt.x error in keepConnected: {} {}", vchID, pt.x,
-                                                frameWidth);
+                                frameWidth);
                             exit(-1);
                         }
 
                         if (pt.y < 0 || pt.y >= frameHeight) {
                             cout << std::format("[{}] zone pt.y error in keepConnected: {} {}", vchID, pt.y,
-                                                frameHeight);
+                                frameHeight);
                             exit(-1);
                         }
                     }
                 }
             }
 
-            for (CCZone &z : cInfo[vchID].ccRcd.ccZones) {
+            for (CCZone& z : cInfo[vchID].ccRcd.ccZones) {
                 if (vchID == z.vchID) {
-                    for (Point &pt : z.pts) {
+                    for (Point& pt : z.pts) {
                         if (pt.x < 0 || pt.x >= frameWidth) {
                             cout << std::format("[{}] ccZone pt.x error in keepConnected: {} {}", vchID, pt.x,
-                                                frameWidth);
+                                frameWidth);
                             exit(-1);
                         }
 
                         if (pt.y < 0 || pt.y >= frameHeight) {
                             cout << std::format("[{}] ccZone pt.y error in keepConnected: {} {}", vchID, pt.y,
-                                                frameHeight);
+                                frameHeight);
                             exit(-1);
                         }
                     }
                 }
             }
 
-            pCfg->odScaleFactors[vchID] =
-                std::min((float)pCfg->odNetWidth / frameWidth, (float)pCfg->odNetHeight / frameHeight);
-            pCfg->odScaleFactorsInv[vchID] = 1.0f / pCfg->odScaleFactors[vchID];
+            if (pCfg->odEnable && pCfg->odChannels[vchID]) {
+                pCfg->odScaleFactors[vchID] =
+                    std::min((float)pCfg->odNetWidth / frameWidth, (float)pCfg->odNetHeight / frameHeight);
+                pCfg->odScaleFactorsInv[vchID] = 1.0f / pCfg->odScaleFactors[vchID];
+            }
 
-            pCfg->fdScaleFactors[vchID] =
-                std::min((float)pCfg->fdNetWidth / frameWidth, (float)pCfg->fdNetHeight / frameHeight);
+            if (pCfg->fdEnable && pCfg->fdChannels[vchID]) {
+                pCfg->fdScaleFactors[vchID] =
+                    std::min((float)pCfg->fdNetWidth / frameWidth, (float)pCfg->fdNetHeight / frameHeight);
+            }
 
-            pCfg->ccScaleFactors[vchID] =
-                std::min((float)pCfg->ccNetWidth / frameWidth, (float)pCfg->ccNetHeight / frameHeight);
+            if (pCfg->ccEnable && pCfg->ccChannels[vchID]) {
+                pCfg->ccScaleFactors[vchID] =
+                    std::min((float)pCfg->ccNetWidth / frameWidth, (float)pCfg->ccNetHeight / frameHeight);
+            }
 
-            if (pCfg->recording)
+            if (pCfg->recording) {
                 videoWriters[vchID].open(outputs[vchID], VideoWriter::fourcc('m', 'p', '4', 'v'), fps,
-                                         Size(frameWidth, frameHeight));  ///*.mp4 format
+                    Size(frameWidth, frameHeight));  ///*.mp4 format
+            }
 
             cout << std::format("[{}] ({}, {}), {}\n", vchID, frameWidth, frameHeight, fps);
-        } else {
+        }
+        else {
             std::cout << "[" << vchID << "] Can't be opened: " << input << std::endl;
         }
     }
 }
 
-bool VideoStreamer::read(Mat &frame, int vchID) {
-    cv::VideoCapture &capture = captures[vchID];
+bool VideoStreamer::read(Mat& frame, int vchID) {
+    cv::VideoCapture& capture = captures[vchID];
     capture.read(frame);
 
     if (frame.empty())

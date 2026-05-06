@@ -17,9 +17,6 @@
 /// Model Info
 #define INPUT_DIRECTORY "inputs/"
 
-// same config file for both windows and linux
-#define CFG_FILEPATH INPUT_DIRECTORY "config.json"
-
 /// System
 #define OD_ID_PERSON 0  /// person should be the first object in a mapping list
 
@@ -75,11 +72,6 @@
 /// IS_MODE
 #define IS_PEOPLE_COUNTING 0
 #define IS_RESTRICTED_AREA 1
-
-/// MIN_OBJECT_MODE
-#define MIN_OBJ_NONE 0
-#define MIN_OBJ_IN_DLL 1
-#define MIN_OBJ_IN_DRAW 2
 
 /// SUPER_EYE_MODE
 #define SUPER_EYE_DISABLE 0
@@ -169,7 +161,7 @@ struct CCZone {
 
 #ifdef _CPU_INFER
     cv::Mat canvas, roiCanvas;            /// for internal usage in CrowdCounter(only for CPU)
-    cv::Point roiTL, roiBR, roiBRScaled;  /// for internal usage in CrowdCounter(only for CPU)
+    cv::Point roiTL, roiBR;  /// for internal usage in CrowdCounter(only for CPU)
     cv::Size roiScaledSize;
     double sH, sW;
 
@@ -363,18 +355,6 @@ struct PedAtts {
     }
 };
 
-struct MinObj {
-    int vchID;
-    int mode;    /// 0(default):none, 1: in dll, 2: in draw
-    int ths[4];  /// 4 partitions
-
-    void init(int _vchID = -1) {
-        vchID = _vchID;
-        mode = MIN_OBJ_NONE;
-        ths[0] = ths[1] = ths[2] = ths[3] = 0;
-    }
-};
-
 struct SuperEye {
     int vchID;
     int mode;
@@ -391,7 +371,6 @@ struct CInfo {
     ODRecord odRcd;
     FDRecord fdRcd;
     CCRecord ccRcd;
-    MinObj minObj;
     SuperEye superEye;
 };
 
@@ -438,6 +417,7 @@ struct Config {
     std::string irModelFile;  /// path to the ir od model file (ex:aipro_ir_1_1.trt)
     int odNetWidth;           /// width of the od model input
     int odNetHeight;          /// height of the od model input
+
     std::vector<float> odScaleFactors;
     std::vector<float> odScaleFactorsInv;
     float odScoreTh;  /// threshold for filtering low confident detections
@@ -446,7 +426,9 @@ struct Config {
     int numClasses;  /// number of classes
     bool odEboxCheckEnable;  /// enable ebox check
     bool odEboxFilterEnable; /// enable ebox filter (only for people detection)
-    
+    bool odFMapEnable;       /// enable feasible map for post-processing
+    std::vector<std::tuple<int, int, std::string>> odFMapParams;
+
     // sr config
     bool srEnable;            /// Enable super eye
     std::string srModelFile;  /// path to the od model file (ex:aipro_od_1_1.trt)
